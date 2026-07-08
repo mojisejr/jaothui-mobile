@@ -1,5 +1,10 @@
 import { mobileGet } from "./client";
-import type { MobileBuffaloList, MobileCertDetail, MobileHome } from "@/types/mobile-api";
+import type {
+  MobileBuffaloList,
+  MobileCertDetail,
+  MobileCertificateImage,
+  MobileHome,
+} from "@/types/mobile-api";
 
 export function getHome() {
   return mobileGet<MobileHome>("/api/mobile/v1/home");
@@ -11,4 +16,10 @@ export function getBuffalos(page = 1) {
 
 export function getCertDetail(microchip: string) {
   return mobileGet<MobileCertDetail>(`/api/mobile/v1/certs/${encodeURIComponent(microchip)}`);
+}
+
+export function getCertCertificate(microchip: string) {
+  return mobileGet<MobileCertificateImage>(
+    `/api/mobile/v1/certs/${encodeURIComponent(microchip)}/certificate`
+  );
 }
