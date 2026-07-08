@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, shadow, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
@@ -7,7 +8,7 @@ type BuffaloCardProps = {
   onPress: () => void;
 };
 
-export function BuffaloCard({ buffalo, onPress }: BuffaloCardProps) {
+function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.imageFrame}>
@@ -36,6 +37,8 @@ export function BuffaloCard({ buffalo, onPress }: BuffaloCardProps) {
     </Pressable>
   );
 }
+
+export const BuffaloCard = memo(BuffaloCardComponent);
 
 function formatAge(months: number | null) {
   if (!months || months < 1) return "น้อยกว่า 1 เดือน";
