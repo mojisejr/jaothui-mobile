@@ -1,26 +1,30 @@
 # JAOTHUI Mobile
 
-Expo / React Native mobile app for JAOTHUI.
+Expo / React Native app for the JAOTHUI Mobile BFF.
 
-## Oracle Boundaries
+## Boundary
 
-- `jaothui-frontend` is the Web + Mobile BFF API authority.
-- This repo consumes only curated `/api/mobile/v1/*` endpoints.
-- No raw tRPC, web cookie flow, database access, production secrets, signing keys, keystores, or app-store credentials belong here.
-- Oracle memory artifacts stay in `/Users/non/dev/opilot/ψ/`, not in this app repo.
+- `jaothui-frontend` owns the web app and `/api/mobile/v1/*` API.
+- This app consumes only the Mobile BFF API.
+- Do not import tRPC, web cookie auth, database code, or Oracle memory files.
+- `main` is protected. Work lands through pull requests.
 
-## Branch Flow
+## Setup
 
-- `main` is protected.
-- Work happens on feature branches.
-- Delivery goes through pull requests into `main`.
+```bash
+bun install
+cp .env.example .env
+bun run start
+```
 
-## Phase 3 Goal
+For Expo Go on a physical phone, set `EXPO_PUBLIC_JAOTHUI_API_BASE_URL` to a URL the phone can reach, such as the Mac LAN IP running `jaothui-frontend`.
 
-Build a small Expo/RN client spike against the real Mobile BFF API:
+## Validation
 
-- Home
-- Buffalo list
-- Certificate detail
+```bash
+bun run phase3:static
+bun run typecheck
+bun run lint
+```
 
-This phase can close static/source-level readiness. Device/native proof requires a separate Expo Go or native evidence pass.
+Phase 3 closes source/static readiness only. Expo Go device proof and native build proof are separate evidence lanes.
