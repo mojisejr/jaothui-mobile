@@ -86,3 +86,11 @@ export type MobileCertDetail = {
   buffalo: MobileBuffaloDetail;
   rewards: MobileReward[];
 };
+
+export type MobileCertificateImage = {
+  microchip: string;
+  tokenId: string;
+  mimeType: "image/jpeg" | string;
+  encoding: "base64" | string;
+  imageBase64: string;
+};
