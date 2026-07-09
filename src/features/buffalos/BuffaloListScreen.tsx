@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
-import { FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 import { getBuffalos } from "@/api/jaothui";
+import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { StateBlock } from "@/components/StateBlock";
-import { colors, spacing } from "@/design/tokens";
+import { bottomNav, colors, spacing } from "@/design/tokens";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 
@@ -35,7 +36,7 @@ export function BuffaloListScreen() {
   const listData = state.status === "success" ? state.data.items : EMPTY_BUFFALOS;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <AppShell activeTab="buffalo" scroll={false}>
       <FlatList
         data={listData}
         keyExtractor={keyExtractor}
@@ -52,7 +53,7 @@ export function BuffaloListScreen() {
         ItemSeparatorComponent={RowSeparator}
         ListHeaderComponent={
           <>
-            <Header onBack={() => router.back()} />
+            <Header />
 
             {state.status === "loading" ? (
               <StateBlock title="กำลังโหลดรายการ" message="กำลังเรียก /api/mobile/v1/buffalos" />
@@ -76,16 +77,13 @@ export function BuffaloListScreen() {
           </>
         }
       />
-    </SafeAreaView>
+    </AppShell>
   );
 }
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header() {
   return (
       <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backText}>กลับ</Text>
-        </Pressable>
         <Text style={styles.title}>NFT เพชรดีกรี</Text>
         <Text style={styles.subtitle}>ข้อมูลจาก Mobile BFF API</Text>
       </View>
@@ -97,30 +95,12 @@ function RowSeparator() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    backgroundColor: colors.background,
-    flex: 1,
-  },
   content: {
-    paddingBottom: 32,
+    paddingBottom: bottomNav.contentPaddingBottom,
     paddingHorizontal: spacing.screenX,
   },
   header: {
     paddingTop: 18,
-  },
-  backButton: {
-    alignSelf: "flex-start",
-    borderColor: colors.borderSoft,
-    borderRadius: spacing.pillRadius,
-    borderWidth: 1,
-    minHeight: 44,
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  backText: {
-    color: colors.gold,
-    fontSize: 14,
-    fontWeight: "800",
   },
   title: {
     color: colors.foreground,

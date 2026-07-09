@@ -76,7 +76,7 @@ export function CertDetailScreen() {
   }, [certificate]);
 
   return (
-    <Screen>
+    <Screen showBottomNav={false}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>กลับ</Text>

@@ -14,11 +14,11 @@ export function HomeScreen() {
   const state = useAsyncResource(loadHome);
 
   return (
-    <Screen>
+    <Screen activeTab="home">
       <View style={styles.hero}>
         <Text style={styles.brand}>JAOTHUI</Text>
         <Text style={styles.headline}>Preserving Thai Buffalo Heritage</Text>
-        <Text style={styles.copy}>Mobile proof against the real JAOTHUI Mobile BFF.</Text>
+        <Text style={styles.copy}>ค้นหาใบพันธุ์ประวัติและข้อมูลกระบือจากระบบ JAOTHUI</Text>
         <Pressable style={styles.primaryButton} onPress={() => router.push("/buffalos")}>
           <Text style={styles.primaryButtonText}>ค้นหาควาย</Text>
         </Pressable>
