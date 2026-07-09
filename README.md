@@ -25,6 +25,10 @@ For Expo Go on a physical phone, set `EXPO_PUBLIC_JAOTHUI_API_BASE_URL` to a URL
 bun run phase3:static
 bun run typecheck
 bun run lint
+bun run test:unit
+bun run test:contract
 ```
 
-Phase 3 closes source/static readiness only. Expo Go device proof and native build proof are separate evidence lanes.
+`test:unit` is the fast local Jest suite. `test:contract` calls the cloud Mobile BFF fixtures and is intentionally separate from `validate` so routine static checks do not depend on network availability.
+
+Expo Go device proof and native build proof are separate evidence lanes.

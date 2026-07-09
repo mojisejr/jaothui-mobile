@@ -1,36 +1,17 @@
 import type { PropsWithChildren } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
-import { colors, spacing } from "@/design/tokens";
+import { AppShell } from "@/components/AppShell";
+import type { BottomNavTab } from "@/components/BottomNav";
 
 type ScreenProps = PropsWithChildren<{
+  activeTab?: BottomNavTab;
   scroll?: boolean;
+  showBottomNav?: boolean;
 }>;
 
-export function Screen({ children, scroll = true }: ScreenProps) {
-  if (!scroll) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.content}>{children}</View>
-      </SafeAreaView>
-    );
-  }
-
+export function Screen({ activeTab, children, scroll = true, showBottomNav = true }: ScreenProps) {
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
-    </SafeAreaView>
+    <AppShell activeTab={activeTab} scroll={scroll} showBottomNav={showBottomNav}>
+      {children}
+    </AppShell>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: spacing.screenX,
-    paddingBottom: 32,
-  },
-});

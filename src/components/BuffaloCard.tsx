@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, shadow, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
+import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
 
 type BuffaloCardProps = {
   buffalo: MobileBuffaloCard;
@@ -20,7 +21,7 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
           </View>
         )}
         <View style={styles.ageBadge}>
-          <Text style={styles.ageText}>{formatAge(buffalo.ageMonths)}</Text>
+          <Text style={styles.ageText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
         </View>
       </View>
       <View style={styles.body}>
@@ -31,7 +32,7 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
           {buffalo.microchip}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
-          {buffalo.certNo ? `ใบรับรอง ${buffalo.certNo}` : "ยังไม่มีเลขใบรับรอง"}
+          วันเกิด : {formatThaiBirthdate(buffalo.birthdate)}
         </Text>
       </View>
     </Pressable>
@@ -39,11 +40,6 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
 }
 
 export const BuffaloCard = memo(BuffaloCardComponent);
-
-function formatAge(months: number | null) {
-  if (!months || months < 1) return "น้อยกว่า 1 เดือน";
-  return `${Math.floor(months)} เดือน`;
-}
 
 const styles = StyleSheet.create({
   card: {
