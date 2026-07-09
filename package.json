@@ -38,6 +38,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "phase3:static": "node scripts/phase3-static-check.mjs",
+    "phase4a:api-contract": "node scripts/phase4a-api-contract-check.mjs",
     "validate": "bun run phase3:static && bun run typecheck && bun run lint"
   },
   "private": true
