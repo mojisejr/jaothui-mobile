@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav, type BottomNavTab } from "@/components/BottomNav";
 import { bottomNav, colors, spacing } from "@/design/tokens";
 
@@ -17,27 +18,31 @@ export function AppShell({
   scroll = true,
   showBottomNav = true,
 }: AppShellProps) {
-  const bottomInset = showBottomNav ? bottomNav.contentPaddingBottom : spacing.xxl;
+  const insets = useSafeAreaInsets();
+  const topInset = insets.top;
+  const bottomInset = showBottomNav ? bottomNav.contentPaddingBottom + insets.bottom : spacing.xxl + insets.bottom;
 
   if (!scroll) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={[styles.fixedContent, contentStyle]}>{children}</View>
+      <View style={styles.safe}>
+        <View style={[styles.fixedContent, { paddingTop: topInset, paddingBottom: bottomInset }, contentStyle]}>
+          {children}
+        </View>
         {showBottomNav ? <BottomNav active={activeTab} /> : null}
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.safe}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }, contentStyle]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: topInset, paddingBottom: bottomInset }, contentStyle]}
         showsVerticalScrollIndicator={false}
       >
         {children}
       </ScrollView>
       {showBottomNav ? <BottomNav active={activeTab} /> : null}
-    </SafeAreaView>
+    </View>
   );
 }
 

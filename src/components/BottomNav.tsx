@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bottomNav, colors, radius, shadow, spacing } from "@/design/tokens";
 
 export type BottomNavTab = "home" | "buffalo" | "profile";
@@ -15,10 +16,14 @@ const profileRoute = "/profile" as never;
 export function BottomNav({ active }: BottomNavProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
   const current = active ?? inferActiveTab(pathname);
 
   return (
-    <View style={styles.nav} accessibilityRole="tablist">
+    <View
+      style={[styles.nav, { minHeight: bottomNav.height + insets.bottom, paddingBottom: insets.bottom }]}
+      accessibilityRole="tablist"
+    >
       <View style={styles.sideGroup}>
         <NavSideTab
           active={current === "home"}
