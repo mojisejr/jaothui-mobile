@@ -5,10 +5,11 @@ import { getCertCertificate, getCertDetail } from "@/api/jaothui";
 import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
 import { StateBlock } from "@/components/StateBlock";
-import { colors, shadow, spacing } from "@/design/tokens";
+import { colors, radius, shadow, spacing } from "@/design/tokens";
 import { shareOrDownloadCertificate } from "@/features/certs/certificateFile";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import type { MobileCertificateImage } from "@/types/mobile-api";
+import type { MobileBuffaloDetail, MobileCertificateImage } from "@/types/mobile-api";
+import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
 
 type CertificateState =
   | { status: "idle"; data: null; error: null }
@@ -17,10 +18,17 @@ type CertificateState =
   | { status: "unavailable"; data: null; error: null }
   | { status: "error"; data: null; error: Error };
 
+type DetailRow = {
+  label: string;
+  value: string;
+  tone?: "default" | "success" | "muted";
+};
+
 export function CertDetailScreen() {
   const router = useRouter();
   const { microchip } = useLocalSearchParams<{ microchip: string }>();
-  const loadCertDetail = useCallback(() => getCertDetail(microchip), [microchip]);
+  const certId = Array.isArray(microchip) ? microchip[0] : microchip;
+  const loadCertDetail = useCallback(() => getCertDetail(certId), [certId]);
   const state = useAsyncResource(loadCertDetail);
   const [certificate, setCertificate] = useState<CertificateState>({
     status: "idle",
@@ -34,14 +42,15 @@ export function CertDetailScreen() {
     if (certificate.status !== "success") return null;
     return `data:${certificate.data.mimeType};base64,${certificate.data.imageBase64}`;
   }, [certificate]);
+  const certificateSummary = state.status === "success" ? state.data.buffalo.certificate : null;
 
   const loadCertificate = useCallback(() => {
-    if (!microchip) return;
+    if (!certId) return;
     setCertificate({ status: "loading", data: null, error: null });
     setFileAction("idle");
     setFileActionError(null);
 
-    getCertCertificate(microchip)
+    getCertCertificate(certId)
       .then((data) => setCertificate({ status: "success", data, error: null }))
       .catch((error) => {
         if (error instanceof MobileApiError && error.code === "CERTIFICATE_UNAVAILABLE") {
@@ -54,13 +63,17 @@ export function CertDetailScreen() {
           error: error instanceof Error ? error : new Error(String(error)),
         });
       });
-  }, [microchip]);
+  }, [certId]);
 
   useEffect(() => {
     if (state.status === "success") {
-      loadCertificate();
+      if (hasCertificateSummary(certificateSummary)) {
+        loadCertificate();
+        return;
+      }
+      setCertificate({ status: "unavailable", data: null, error: null });
     }
-  }, [loadCertificate, state.status]);
+  }, [certificateSummary, loadCertificate, state.status]);
 
   const handleShareCertificate = useCallback(async () => {
     if (certificate.status !== "success") return;
@@ -84,7 +97,7 @@ export function CertDetailScreen() {
       </View>
 
       {state.status === "loading" ? (
-        <StateBlock title="กำลังโหลดใบพันธุ์ประวัติ" message={microchip} />
+        <StateBlock title="กำลังโหลดใบพันธุ์ประวัติ" message={certId} />
       ) : null}
 
       {state.status === "error" ? (
@@ -97,265 +110,416 @@ export function CertDetailScreen() {
       ) : null}
 
       {state.status === "success" ? (
-        <View style={styles.card}>
-          {state.data.buffalo.imageUrl ? (
-            <Image source={{ uri: state.data.buffalo.imageUrl }} style={styles.image} resizeMode="cover" />
-          ) : null}
-          <View style={styles.body}>
-            <Text style={styles.label}>ใบพันธุ์ประวัติ</Text>
-            <Text style={styles.name}>{state.data.buffalo.name}</Text>
-            <Text style={styles.microchip}>{state.data.buffalo.microchip}</Text>
-
-            <View style={styles.detailGrid}>
-              <Info label="เพศ" value={state.data.buffalo.sex} />
-              <Info label="สี" value={state.data.buffalo.color} />
-              <Info label="อายุ" value={formatAge(state.data.buffalo.ageMonths)} />
-              <Info label="เลขใบรับรอง" value={state.data.buffalo.certNo} />
-            </View>
-
-            <Text style={styles.detail}>{state.data.buffalo.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</Text>
-
-            <View style={styles.certificateBox}>
-              <View style={styles.certificateHeader}>
-                <View>
-                  <Text style={styles.rewardTitle}>รูปใบรับรอง</Text>
-                  <Text style={styles.rewardText}>สำหรับตรวจสอบ บันทึก หรือแชร์จากมือถือ</Text>
-                </View>
-                {certificate.status === "success" ? (
-                  <Text style={styles.certificateBadge}>พร้อมใช้งาน</Text>
-                ) : null}
-              </View>
-
-              {certificate.status === "loading" || certificate.status === "idle" ? (
-                <Text style={styles.certificateStatus}>กำลังโหลดรูปใบรับรอง...</Text>
-              ) : null}
-
-              {certificate.status === "unavailable" ? (
-                <View style={styles.emptyCertificate}>
-                  <Text style={styles.emptyTitle}>ยังไม่มีรูปใบรับรอง</Text>
-                  <Text style={styles.rewardText}>
-                    ข้อมูลควายตัวนี้เปิดดูได้แล้ว แต่ระบบยังไม่มีไฟล์รูปใบรับรองให้ดาวน์โหลด
-                  </Text>
-                  <Pressable style={styles.secondaryButton} onPress={loadCertificate}>
-                    <Text style={styles.secondaryButtonText}>ลองโหลดอีกครั้ง</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {certificate.status === "error" ? (
-                <View style={styles.emptyCertificate}>
-                  <Text style={styles.emptyTitle}>โหลดรูปใบรับรองไม่สำเร็จ</Text>
-                  <Text style={styles.rewardText}>{certificate.error.message}</Text>
-                  <Pressable style={styles.secondaryButton} onPress={loadCertificate}>
-                    <Text style={styles.secondaryButtonText}>ลองใหม่</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {certificateImageUri ? (
-                <View style={styles.certificatePreview}>
-                  <Image
-                    source={{ uri: certificateImageUri }}
-                    style={styles.certificateImage}
-                    resizeMode="contain"
-                  />
-                  <Pressable
-                    style={styles.primaryButton}
-                    onPress={handleShareCertificate}
-                    disabled={fileAction === "working"}
-                  >
-                    <Text style={styles.primaryButtonText}>
-                      {fileAction === "working" ? "กำลังเตรียมไฟล์..." : "บันทึก / แชร์ใบรับรอง"}
-                    </Text>
-                  </Pressable>
-                  {fileAction === "done" ? (
-                    <Text style={styles.actionNote}>เปิดหน้าบันทึกหรือแชร์ไฟล์แล้ว</Text>
-                  ) : null}
-                  {fileAction === "error" && fileActionError ? (
-                    <Text style={styles.errorNote}>{fileActionError}</Text>
-                  ) : null}
-                </View>
-              ) : null}
-            </View>
-
-            <View style={styles.rewardBox}>
-              <Text style={styles.rewardTitle}>รางวัล</Text>
-              <Text style={styles.rewardText}>
-                {state.data.rewards.length > 0
-                  ? `${state.data.rewards.length} รายการ`
-                  : "ยังไม่มีข้อมูลรางวัล"}
-              </Text>
-            </View>
-          </View>
-        </View>
+        <CertDetailContent
+          buffalo={state.data.buffalo}
+          certificate={certificate}
+          certificateImageUri={certificateImageUri}
+          fileAction={fileAction}
+          fileActionError={fileActionError}
+          rewardCount={state.data.rewards.length}
+          onRetryCertificate={loadCertificate}
+          onShareCertificate={handleShareCertificate}
+        />
       ) : null}
     </Screen>
   );
 }
 
-function Info({ label, value }: { label: string; value?: string | null }) {
+function CertDetailContent({
+  buffalo,
+  certificate,
+  certificateImageUri,
+  fileAction,
+  fileActionError,
+  rewardCount,
+  onRetryCertificate,
+  onShareCertificate,
+}: {
+  buffalo: MobileBuffaloDetail;
+  certificate: CertificateState;
+  certificateImageUri: string | null;
+  fileAction: "idle" | "working" | "done" | "error";
+  fileActionError: string | null;
+  rewardCount: number;
+  onRetryCertificate: () => void;
+  onShareCertificate: () => void;
+}) {
+  const rows = getDetailRows(buffalo, rewardCount, certificate.status);
+
   return (
-    <View style={styles.info}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value || "N/A"}</Text>
+    <View style={styles.content}>
+      <View style={styles.heroImageFrame}>
+        {buffalo.imageUrl ? (
+          <Image source={{ uri: buffalo.imageUrl }} style={styles.heroImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.imageFallback}>
+            <Text style={styles.imageFallbackText}>JAOTHUI</Text>
+          </View>
+        )}
+        <View style={styles.ageBadge}>
+          <Text style={styles.ageBadgeText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.titleBlock}>
+        <Text style={styles.eyebrow}>ใบพันธุ์ประวัติ</Text>
+        <Text style={styles.name}>{displayValue(buffalo.name, "ไม่มีชื่อ")}</Text>
+        <Text style={styles.microchip}>{displayValue(buffalo.microchip)}</Text>
+        {hasValue(buffalo.detail) ? <Text style={styles.detail}>{buffalo.detail}</Text> : null}
+      </View>
+
+      <View style={styles.infoPanel}>
+        {rows.map((row) => (
+          <StatRow key={row.label} row={row} />
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleBlock}>
+            <Text style={styles.sectionTitle}>รูปใบรับรอง</Text>
+            <Text style={styles.sectionSubtitle}>สำหรับตรวจสอบ บันทึก หรือแชร์จากมือถือ</Text>
+          </View>
+          {certificate.status === "success" ? <StatusPill label="พร้อมใช้งาน" /> : null}
+        </View>
+
+        {certificate.status === "loading" || certificate.status === "idle" ? (
+          <Text style={styles.sectionNote}>กำลังโหลดรูปใบรับรอง...</Text>
+        ) : null}
+
+        {certificate.status === "unavailable" ? (
+          <UnavailableCertificate onRetry={onRetryCertificate} />
+        ) : null}
+
+        {certificate.status === "error" ? (
+          <View style={styles.emptyCertificate}>
+            <Text style={styles.emptyTitle}>โหลดรูปใบรับรองไม่สำเร็จ</Text>
+            <Text style={styles.sectionNote}>{certificate.error.message}</Text>
+            <Pressable style={styles.secondaryButton} onPress={onRetryCertificate}>
+              <Text style={styles.secondaryButtonText}>ลองใหม่</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {certificateImageUri ? (
+          <View style={styles.certificatePreview}>
+            <Image source={{ uri: certificateImageUri }} style={styles.certificateImage} resizeMode="contain" />
+            <Pressable
+              style={[styles.primaryButton, fileAction === "working" ? styles.primaryButtonDisabled : null]}
+              onPress={onShareCertificate}
+              disabled={fileAction === "working"}
+            >
+              <Text style={styles.primaryButtonText}>
+                {fileAction === "working" ? "กำลังเตรียมไฟล์..." : "บันทึก / แชร์ใบรับรอง"}
+              </Text>
+            </Pressable>
+            {fileAction === "done" ? <Text style={styles.actionNote}>เปิดหน้าบันทึกหรือแชร์ไฟล์แล้ว</Text> : null}
+            {fileAction === "error" && fileActionError ? (
+              <Text style={styles.errorNote}>{fileActionError}</Text>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
-function formatAge(months: number | null) {
-  if (!months || months < 1) return "น้อยกว่า 1 เดือน";
-  return `${Math.floor(months)} เดือน`;
+function StatRow({ row }: { row: DetailRow }) {
+  return (
+    <View style={styles.statRow}>
+      <Text style={styles.statLabel}>{row.label}</Text>
+      <Text
+        style={[
+          styles.statValue,
+          row.tone === "success" ? styles.statValueSuccess : null,
+          row.tone === "muted" ? styles.statValueMuted : null,
+        ]}
+      >
+        {row.value}
+      </Text>
+    </View>
+  );
+}
+
+function StatusPill({ label }: { label: string }) {
+  return (
+    <View style={styles.statusPill}>
+      <Text style={styles.statusPillText}>{label}</Text>
+    </View>
+  );
+}
+
+function UnavailableCertificate({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={styles.emptyCertificate}>
+      <Text style={styles.emptyTitle}>ยังไม่มีรูปใบรับรอง</Text>
+      <Text style={styles.sectionNote}>
+        ข้อมูลควายตัวนี้เปิดดูได้แล้ว แต่ระบบยังไม่มีไฟล์รูปใบรับรองให้ดาวน์โหลด
+      </Text>
+      <Pressable style={styles.secondaryButton} onPress={onRetry}>
+        <Text style={styles.secondaryButtonText}>ลองโหลดอีกครั้ง</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function getDetailRows(
+  buffalo: MobileBuffaloDetail,
+  rewardCount: number,
+  certificateStatus: CertificateState["status"]
+): DetailRow[] {
+  const hasCertificate = certificateStatus === "success" || hasCertificateSummary(buffalo.certificate);
+  const hasDna = hasValue(buffalo.dna);
+
+  return [
+    { label: "อายุ", value: formatBuffaloAge(buffalo.ageMonths) },
+    { label: "Signature ID", value: displayValue(buffalo.microchip) },
+    { label: "วันเกิด", value: formatThaiBirthdate(buffalo.birthdate) },
+    { label: "เพศ", value: displayValue(buffalo.sex) },
+    { label: "แม่พันธุ์", value: displayValue(buffalo.motherId) },
+    { label: "พ่อพันธุ์", value: displayValue(buffalo.fatherId) },
+    {
+      label: "แหล่งกำเนิด",
+      value: `${formatOrigin(buffalo.origin)}${hasDna ? " · Verified" : ""}`,
+      tone: hasDna ? "success" : "default",
+    },
+    { label: "ส่วนสูง", value: formatHeight(buffalo.height) },
+    { label: "สี", value: displayValue(buffalo.color) },
+    { label: "รางวัล", value: rewardCount > 0 ? `${rewardCount} รายการ` : "N/A", tone: rewardCount > 0 ? "success" : "muted" },
+    {
+      label: "ใบรับรอง",
+      value: hasCertificate ? "ดูใบรับรอง" : certificateStatus === "loading" ? "กำลังตรวจสอบ" : "N/A",
+      tone: hasCertificate ? "success" : "muted",
+    },
+  ];
+}
+
+function hasCertificateSummary(certificate: unknown) {
+  if (!certificate || typeof certificate !== "object") return false;
+  return "microchip" in certificate && hasValue((certificate as { microchip?: unknown }).microchip);
+}
+
+function hasValue(value: unknown) {
+  if (value === null || value === undefined) return false;
+  const text = String(value).trim();
+  return text.length > 0 && text !== "N/A";
+}
+
+function displayValue(value: unknown, fallback = "N/A") {
+  return hasValue(value) ? String(value) : fallback;
+}
+
+function formatOrigin(origin: string | null) {
+  if (!hasValue(origin)) return "N/A";
+  if (origin?.toLowerCase() === "thai") return "ไทย";
+  return origin;
+}
+
+function formatHeight(height: string | null) {
+  if (!hasValue(height)) return "N/A";
+  return `${height} ซม.`;
 }
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 18,
+    paddingTop: spacing.md,
   },
   backButton: {
     alignSelf: "flex-start",
     borderColor: colors.borderSoft,
     borderRadius: spacing.pillRadius,
     borderWidth: 1,
-    minHeight: 44,
     justifyContent: "center",
-    paddingHorizontal: 16,
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.md,
   },
   backText: {
     color: colors.gold,
     fontSize: 14,
     fontWeight: "800",
   },
-  card: {
-    backgroundColor: colors.surface,
+  content: {
+    gap: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  heroImageFrame: {
+    aspectRatio: 4 / 3,
+    backgroundColor: colors.surfaceRaised,
     borderColor: colors.borderSoft,
-    borderRadius: spacing.cardRadius,
+    borderRadius: radius.card,
     borderWidth: 1,
-    marginTop: 18,
     overflow: "hidden",
+    width: "100%",
     ...shadow.gold,
   },
-  image: {
-    aspectRatio: 4 / 3,
+  heroImage: {
+    height: "100%",
     width: "100%",
   },
-  body: {
-    padding: 18,
+  imageFallback: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
   },
-  label: {
+  imageFallbackText: {
+    color: colors.gold,
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  ageBadge: {
+    backgroundColor: colors.overlayBadge,
+    borderColor: colors.borderSoft,
+    borderRadius: spacing.pillRadius,
+    borderWidth: 1,
+    bottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    position: "absolute",
+    right: spacing.sm,
+  },
+  ageBadgeText: {
     color: colors.gold,
     fontSize: 12,
     fontWeight: "900",
-    letterSpacing: 1,
+  },
+  titleBlock: {
+    gap: spacing.xs,
+  },
+  eyebrow: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: "900",
     textTransform: "uppercase",
   },
   name: {
     color: colors.foreground,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "900",
-    marginTop: 6,
+    lineHeight: 34,
   },
   microchip: {
     color: colors.muted,
     fontSize: 13,
     fontVariant: ["tabular-nums"],
-    marginTop: 4,
-  },
-  detailGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 18,
-  },
-  info: {
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderSoft,
-    borderRadius: 14,
-    borderWidth: 1,
-    flexBasis: "47%",
-    flexGrow: 1,
-    padding: 12,
-  },
-  infoLabel: {
-    color: colors.muted,
-    fontSize: 11,
-  },
-  infoValue: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: "800",
-    marginTop: 4,
   },
   detail: {
     color: colors.muted,
     fontSize: 14,
     lineHeight: 22,
-    marginTop: 18,
   },
-  rewardBox: {
+  infoPanel: {
+    backgroundColor: colors.surface,
     borderColor: colors.borderSoft,
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderWidth: 1,
-    marginTop: 18,
-    padding: 14,
+    overflow: "hidden",
   },
-  certificateBox: {
-    backgroundColor: colors.surfaceRaised,
+  statRow: {
+    alignItems: "center",
+    borderBottomColor: colors.borderSoft,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    minHeight: 54,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  statLabel: {
+    color: colors.muted,
+    flexShrink: 0,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  statValue: {
+    color: colors.foreground,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  statValueSuccess: {
+    color: colors.success,
+  },
+  statValueMuted: {
+    color: colors.muted,
+  },
+  section: {
+    backgroundColor: colors.surface,
     borderColor: colors.borderSoft,
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderWidth: 1,
-    marginTop: 18,
-    padding: 14,
+    padding: spacing.md,
   },
-  certificateHeader: {
+  sectionHeader: {
     alignItems: "flex-start",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: spacing.sm,
     justifyContent: "space-between",
   },
-  certificateBadge: {
+  sectionTitleBlock: {
+    flex: 1,
+    minWidth: 210,
+  },
+  sectionTitle: {
+    color: colors.foreground,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  sectionSubtitle: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  sectionNote: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
+  statusPill: {
     backgroundColor: "rgba(63, 166, 106, 0.16)",
     borderColor: "rgba(63, 166, 106, 0.5)",
     borderRadius: spacing.pillRadius,
     borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  statusPillText: {
     color: colors.success,
     fontSize: 12,
     fontWeight: "900",
-    overflow: "hidden",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  certificateStatus: {
-    color: colors.muted,
-    fontSize: 13,
-    marginTop: 14,
   },
   certificatePreview: {
-    marginTop: 14,
+    marginTop: spacing.md,
   },
   certificateImage: {
     aspectRatio: 1.414,
     backgroundColor: "#ffffff",
-    borderRadius: 10,
+    borderRadius: radius.sm,
     width: "100%",
   },
   emptyCertificate: {
-    marginTop: 14,
+    marginTop: spacing.md,
   },
   emptyTitle: {
     color: colors.foreground,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "900",
-    marginBottom: 6,
   },
   primaryButton: {
     alignItems: "center",
     backgroundColor: colors.gold,
     borderRadius: spacing.pillRadius,
     justifyContent: "center",
-    marginTop: 14,
+    marginTop: spacing.md,
     minHeight: 46,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.md,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
   },
   primaryButtonText: {
     color: colors.background,
@@ -369,9 +533,9 @@ const styles = StyleSheet.create({
     borderRadius: spacing.pillRadius,
     borderWidth: 1,
     justifyContent: "center",
-    marginTop: 12,
-    minHeight: 44,
-    paddingHorizontal: 16,
+    marginTop: spacing.sm,
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.md,
   },
   secondaryButtonText: {
     color: colors.gold,
@@ -381,23 +545,13 @@ const styles = StyleSheet.create({
   actionNote: {
     color: colors.success,
     fontSize: 12,
-    marginTop: 10,
+    marginTop: spacing.sm,
     textAlign: "center",
   },
   errorNote: {
     color: colors.danger,
     fontSize: 12,
-    marginTop: 10,
+    marginTop: spacing.sm,
     textAlign: "center",
-  },
-  rewardTitle: {
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  rewardText: {
-    color: colors.muted,
-    fontSize: 13,
-    marginTop: 4,
   },
 });
