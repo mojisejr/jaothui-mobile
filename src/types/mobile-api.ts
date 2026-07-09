@@ -30,6 +30,21 @@ export type MobileBuffaloCard = {
   href: string;
 };
 
+export type MobileBuffaloSexFilter = "all" | "female" | "male";
+export type MobileBuffaloColorFilter = "all" | "black" | "albino";
+export type MobileBuffaloAgeOperator = ">" | "<" | ">=" | "<=" | "=";
+export type MobileBuffaloSort = "latest" | "oldest" | "youngest";
+
+export type MobileBuffaloQuery = {
+  page?: number;
+  sex?: MobileBuffaloSexFilter;
+  color?: MobileBuffaloColorFilter;
+  ageOperator?: MobileBuffaloAgeOperator;
+  ageValue?: string;
+  sortBy?: MobileBuffaloSort;
+  search?: string;
+};
+
 export type MobileReward = {
   id: string;
   microchip: string;
