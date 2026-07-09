@@ -6,6 +6,7 @@ import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
 import { StateBlock } from "@/components/StateBlock";
 import { colors, radius, shadow, spacing } from "@/design/tokens";
+import { hasCertificateSummary } from "@/features/certs/certificateAvailability";
 import { shareOrDownloadCertificate } from "@/features/certs/certificateFile";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import type { MobileBuffaloDetail, MobileCertificateImage } from "@/types/mobile-api";
@@ -292,11 +293,6 @@ function getDetailRows(
       tone: hasCertificate ? "success" : "muted",
     },
   ];
-}
-
-function hasCertificateSummary(certificate: unknown) {
-  if (!certificate || typeof certificate !== "object") return false;
-  return "microchip" in certificate && hasValue((certificate as { microchip?: unknown }).microchip);
 }
 
 function hasValue(value: unknown) {

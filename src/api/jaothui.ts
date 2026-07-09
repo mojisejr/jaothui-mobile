@@ -11,7 +11,7 @@ export function getHome() {
   return mobileGet<MobileHome>("/api/mobile/v1/home");
 }
 
-export function getBuffalos(query: MobileBuffaloQuery = {}) {
+export function buildBuffaloQueryString(query: MobileBuffaloQuery = {}) {
   const params = new URLSearchParams();
   params.set("page", String(query.page ?? 1));
   params.set("sortBy", query.sortBy ?? "latest");
@@ -24,7 +24,11 @@ export function getBuffalos(query: MobileBuffaloQuery = {}) {
     params.set("ageValue", query.ageValue.trim());
   }
 
-  return mobileGet<MobileBuffaloList>(`/api/mobile/v1/buffalos?${params.toString()}`);
+  return params.toString();
+}
+
+export function getBuffalos(query: MobileBuffaloQuery = {}) {
+  return mobileGet<MobileBuffaloList>(`/api/mobile/v1/buffalos?${buildBuffaloQueryString(query)}`);
 }
 
 export function getCertDetail(microchip: string) {
