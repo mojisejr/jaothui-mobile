@@ -109,3 +109,34 @@ export type MobileCertificateImage = {
   encoding: "base64" | string;
   imageBase64: string;
 };
+
+export type MobileBitkubNextIdentity = {
+  walletAddress: string;
+  email: string | null;
+  provider: "bitkub-next";
+};
+
+export type MobileBitkubNextSession = {
+  sessionToken: string;
+  expiresAt: number;
+  identity: MobileBitkubNextIdentity;
+};
+
+export type MobileMe = MobileBitkubNextIdentity;
+
+export type MobileProfile = {
+  identity: MobileBitkubNextIdentity;
+  member: {
+    id: string | number;
+    name: string | null;
+    avatarUrl: string | null;
+    email: string | null;
+    farmName: string | null;
+    role: string | null;
+    statusLabel: string;
+  } | null;
+  ownedBuffalos: MobileBuffaloCard[];
+  counts: {
+    ownedBuffalos: number;
+  };
+};
