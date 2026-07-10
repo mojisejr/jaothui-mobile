@@ -26,6 +26,7 @@ export class MobileApiError extends Error {
 function buildHeaders(options: MobileRequestOptions) {
   const headers: Record<string, string> = {
     Accept: "application/json",
+    "Cache-Control": "no-cache",
   };
 
   if (options.method === "POST") {
@@ -46,10 +47,20 @@ export async function mobileRequest<T>(
   const method = options.method ?? "GET";
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
+    cache: "no-store",
     headers: buildHeaders({ ...options, method }),
     body: method === "POST" ? JSON.stringify(options.body ?? {}) : undefined,
   });
-  const payload = (await response.json()) as MobileResponse<T>;
+  let payload: MobileResponse<T>;
+  try {
+    payload = (await response.json()) as MobileResponse<T>;
+  } catch {
+    throw new MobileApiError(
+      "JAOTHUI mobile API returned an unreadable response",
+      "UNREADABLE_RESPONSE",
+      response.status
+    );
+  }
 
   if (!payload.ok) {
     throw new MobileApiError(payload.error.message, payload.error.code, response.status);

@@ -23,7 +23,7 @@ function createStorage(initial: Record<string, string> = {}, available = true) {
 
 const session: MobileBitkubNextSession = {
   sessionToken: "session-token",
-  expiresAt: 4_000_000_000_000,
+  expiresAt: 4_000_000_000,
   identity: {
     walletAddress: "0x123",
     email: "non@example.com",
@@ -37,8 +37,22 @@ describe("mobile session storage", () => {
 
     await saveMobileSession(session, storage);
 
-    await expect(loadMobileSession(storage, 3_000)).resolves.toEqual(session);
+    await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(session);
     await expect(loadMobileSessionToken(storage)).resolves.toBe("session-token");
+  });
+
+  it("compares API seconds-based expiry against device milliseconds", async () => {
+    const storage = createStorage({
+      "jaothui.mobileSession.v1": JSON.stringify({
+        ...session,
+        expiresAt: 1_800_000_000,
+      }),
+    });
+
+    await expect(loadMobileSession(storage, 1_700_000_000_000)).resolves.toMatchObject({
+      sessionToken: "session-token",
+    });
+    expect(storage.deleteItemAsync).not.toHaveBeenCalled();
   });
 
   it("clears expired or invalid sessions", async () => {
@@ -46,11 +60,11 @@ describe("mobile session storage", () => {
     const expiredStorage = createStorage({
       "jaothui.mobileSession.v1": JSON.stringify(expiredSession),
     });
-    await expect(loadMobileSession(expiredStorage, 5_000)).resolves.toBeNull();
+    await expect(loadMobileSession(expiredStorage, 5_000_000)).resolves.toBeNull();
     expect(expiredStorage.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
 
     const invalidStorage = createStorage({ "jaothui.mobileSession.v1": "{bad json" });
-    await expect(loadMobileSession(invalidStorage, 3_000)).resolves.toBeNull();
+    await expect(loadMobileSession(invalidStorage, 3_000_000)).resolves.toBeNull();
     expect(invalidStorage.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
   });
 

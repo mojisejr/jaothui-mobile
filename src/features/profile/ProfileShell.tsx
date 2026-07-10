@@ -35,8 +35,16 @@ export function ProfileShell() {
 
   const loadProfileFromSession = useCallback(async (session: MobileBitkubNextSession) => {
     setState({ status: "loading", session });
-    const profile = await getProfile(session.sessionToken);
-    setState({ status: "connected", session, profile });
+    try {
+      const profile = await getProfile(session.sessionToken);
+      setState({ status: "connected", session, profile });
+    } catch (error) {
+      setState({
+        status: "error",
+        message: error instanceof Error ? error.message : "โหลดโปรไฟล์ไม่สำเร็จ",
+        session,
+      });
+    }
   }, []);
 
   const refresh = useCallback(async () => {
