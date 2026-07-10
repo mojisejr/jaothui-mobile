@@ -5,6 +5,12 @@ const DEFAULT_API_BASE_URL = "http://localhost:3020";
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_JAOTHUI_API_BASE_URL?.replace(/\/$/, "") || DEFAULT_API_BASE_URL;
 
+type MobileRequestOptions = {
+  method?: "GET" | "POST";
+  body?: unknown;
+  bearerToken?: string | null;
+};
+
 export class MobileApiError extends Error {
   code: string;
   status: number;
@@ -17,11 +23,31 @@ export class MobileApiError extends Error {
   }
 }
 
-export async function mobileGet<T>(path: string): Promise<T> {
+function buildHeaders(options: MobileRequestOptions) {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+
+  if (options.method === "POST") {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (options.bearerToken) {
+    headers.Authorization = `Bearer ${options.bearerToken}`;
+  }
+
+  return headers;
+}
+
+export async function mobileRequest<T>(
+  path: string,
+  options: MobileRequestOptions = {}
+): Promise<T> {
+  const method = options.method ?? "GET";
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      Accept: "application/json",
-    },
+    method,
+    headers: buildHeaders({ ...options, method }),
+    body: method === "POST" ? JSON.stringify(options.body ?? {}) : undefined,
   });
   const payload = (await response.json()) as MobileResponse<T>;
 
@@ -30,4 +56,16 @@ export async function mobileGet<T>(path: string): Promise<T> {
   }
 
   return payload.data;
+}
+
+export function mobileGet<T>(path: string): Promise<T> {
+  return mobileRequest<T>(path);
+}
+
+export function mobilePost<T>(path: string, body: unknown): Promise<T> {
+  return mobileRequest<T>(path, { method: "POST", body });
+}
+
+export function mobileGetWithAuth<T>(path: string, bearerToken?: string | null): Promise<T> {
+  return mobileRequest<T>(path, { bearerToken });
 }

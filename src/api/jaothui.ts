@@ -1,10 +1,12 @@
-import { mobileGet } from "./client";
+import { mobileGet, mobileGetWithAuth } from "./client";
 import type {
   MobileBuffaloList,
   MobileBuffaloQuery,
   MobileCertDetail,
   MobileCertificateImage,
   MobileHome,
+  MobileMe,
+  MobileProfile,
 } from "@/types/mobile-api";
 
 export function getHome() {
@@ -39,4 +41,12 @@ export function getCertCertificate(microchip: string) {
   return mobileGet<MobileCertificateImage>(
     `/api/mobile/v1/certs/${encodeURIComponent(microchip)}/certificate`
   );
+}
+
+export function getMe(sessionToken: string) {
+  return mobileGetWithAuth<MobileMe>("/api/mobile/v1/me", sessionToken);
+}
+
+export function getProfile(sessionToken: string) {
+  return mobileGetWithAuth<MobileProfile>("/api/mobile/v1/profile", sessionToken);
 }
