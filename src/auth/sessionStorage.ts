@@ -35,6 +35,10 @@ function isMobileBitkubNextSession(value: unknown): value is MobileBitkubNextSes
   );
 }
 
+function toUnixSeconds(nowMs: number) {
+  return Math.floor(nowMs / 1000);
+}
+
 export async function saveMobileSession(
   session: MobileBitkubNextSession,
   storage: SecureStoreAdapter = SecureStore
@@ -49,7 +53,7 @@ export async function clearMobileSession(storage: SecureStoreAdapter = SecureSto
 
 export async function loadMobileSession(
   storage: SecureStoreAdapter = SecureStore,
-  now = Date.now()
+  nowMs = Date.now()
 ): Promise<MobileBitkubNextSession | null> {
   await assertStorageAvailable(storage);
   const raw = await storage.getItemAsync(SESSION_KEY);
@@ -62,7 +66,7 @@ export async function loadMobileSession(
       return null;
     }
 
-    if (parsed.expiresAt <= now) {
+    if (parsed.expiresAt <= toUnixSeconds(nowMs)) {
       await clearMobileSession(storage);
       return null;
     }
