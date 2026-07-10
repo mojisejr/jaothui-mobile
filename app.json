@@ -8,13 +8,14 @@
     "scheme": "jaothui",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.jaothui.mobile",
+      "icon": "./assets/images/icon.png"
     },
     "android": {
+      "package": "com.jaothui.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#070707",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
@@ -39,6 +40,19 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "41406db1-3e4f-4663-b7d9-f71f83e2f32d"
+      }
+    },
+    "owner": "nonthasak",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/41406db1-3e4f-4663-b7d9-f71f83e2f32d"
     }
   }
 }

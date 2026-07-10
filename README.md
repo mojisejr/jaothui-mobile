@@ -32,3 +32,45 @@ bun run test:contract
 `test:unit` is the fast local Jest suite. `test:contract` calls the cloud Mobile BFF fixtures and is intentionally separate from `validate` so routine static checks do not depend on network availability.
 
 Expo Go device proof and native build proof are separate evidence lanes.
+
+## Internal Distribution
+
+This project is linked to EAS project `41406db1-3e4f-4663-b7d9-f71f83e2f32d` under the Expo owner configured in `app.json`.
+
+Internal builds use:
+
+- Android package: `com.jaothui.mobile`
+- iOS bundle identifier: `com.jaothui.mobile`
+- EAS channel: `internal`
+- EAS Update branch: `internal`
+- Public Mobile BFF URL: `https://www.jaothui.com`
+
+Before creating an internal build, run:
+
+```bash
+bun run validate
+bun run test
+bun run test:contract
+```
+
+Android internal build:
+
+```bash
+bun run build:internal:android
+```
+
+iOS internal build:
+
+```bash
+bun run build:internal:ios
+```
+
+iOS internal installation requires Apple Developer credentials and registered device UDIDs for ad hoc builds. Android internal builds produce an APK install link from EAS and do not require a Google Play account.
+
+Publish a JS/assets-only internal update:
+
+```bash
+bun run update:internal -- --message "Short update note"
+```
+
+Use EAS Update only for JS, assets, and public UI/content changes that do not change native dependencies, plugins, app identifiers, permissions, Expo SDK, or other native runtime config. Native-layer changes require a fresh EAS build.
