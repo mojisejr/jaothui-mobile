@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
-import { getHome } from "@/api/jaothui";
+import { getHome, getNewsEvents } from "@/api/jaothui";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { Screen } from "@/components/Screen";
 import { Skeleton } from "@/components/Skeleton";
@@ -9,6 +9,7 @@ import { StateBlock } from "@/components/StateBlock";
 import { StatCard } from "@/components/StatCard";
 import { colors, radius, shadow, spacing, typography } from "@/design/tokens";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { NewsEventRail } from "./NewsEventRail";
 
 const heroImage = require("@/assets/images/jaothui-v2-hero-image.png");
 const logoSource = require("@/assets/images/thuiLogo.png");
@@ -16,7 +17,9 @@ const logoSource = require("@/assets/images/thuiLogo.png");
 export function HomeScreen() {
   const router = useRouter();
   const loadHome = useCallback(() => getHome(), []);
+  const loadNewsEvents = useCallback(() => getNewsEvents(), []);
   const state = useAsyncResource(loadHome);
+  const newsEventsState = useAsyncResource(loadNewsEvents);
   const heroSubtitle =
     state.status === "success" && state.data.hero.subtitle !== "Thai Buffalo Platform"
       ? state.data.hero.subtitle
@@ -103,6 +106,8 @@ export function HomeScreen() {
           {state.data.featured.length === 0 ? (
             <StateBlock title="ยังไม่มีข้อมูลกระบือแนะนำ" message="กลับมาตรวจสอบรายการใหม่อีกครั้งภายหลัง" />
           ) : null}
+
+          <NewsEventRail state={newsEventsState} onRetry={newsEventsState.reload} />
         </>
       ) : null}
     </Screen>

@@ -13,6 +13,7 @@ const required = [
   "src/components/BuffaloCard.tsx",
   "src/design/tokens.ts",
   "src/features/home/HomeScreen.tsx",
+  "src/features/home/NewsEventRail.tsx",
   "src/features/buffalos/BuffaloListScreen.tsx",
   "src/features/certs/CertDetailScreen.tsx",
   "src/types/mobile-api.ts",

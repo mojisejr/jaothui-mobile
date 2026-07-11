@@ -87,6 +87,31 @@ export type MobileHome = {
   featured: MobileBuffaloCard[];
 };
 
+export type MobileNewsEventType = "news" | "event" | "announcement";
+
+export type MobileNewsEventCard = {
+  id: string;
+  title: string;
+  slug: string;
+  type: MobileNewsEventType;
+  typeLabel: string;
+  featured: boolean;
+  priority: number;
+  publishedAt: string | null;
+  eventStartAt: string | null;
+  eventEndAt: string | null;
+  displayDate: string;
+  location: string | null;
+  excerpt: string;
+  coverImageUrl: string | null;
+  ctaLabel: string;
+  ctaUrl: string | null;
+};
+
+export type MobileNewsEvents = {
+  items: MobileNewsEventCard[];
+};
+
 export type MobileBuffaloList = {
   items: MobileBuffaloCard[];
   pagination: {
