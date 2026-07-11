@@ -6,11 +6,16 @@ import type {
   MobileCertificateImage,
   MobileHome,
   MobileMe,
+  MobileNewsEvents,
   MobileProfile,
 } from "@/types/mobile-api";
 
 export function getHome() {
   return mobileGet<MobileHome>("/api/mobile/v1/home");
+}
+
+export function getNewsEvents() {
+  return mobileGet<MobileNewsEvents>("/api/mobile/v1/news-events");
 }
 
 export function buildBuffaloQueryString(query: MobileBuffaloQuery = {}) {

@@ -52,10 +52,43 @@ function classifyDirtyRows(items) {
   });
 }
 
+function assertNewsEventShape(item, source) {
+  const required = [
+    "id",
+    "title",
+    "slug",
+    "type",
+    "typeLabel",
+    "featured",
+    "priority",
+    "publishedAt",
+    "eventStartAt",
+    "eventEndAt",
+    "displayDate",
+    "location",
+    "excerpt",
+    "coverImageUrl",
+    "ctaLabel",
+    "ctaUrl",
+  ];
+
+  for (const field of required) {
+    if (!(field in item)) {
+      throw new Error(`${source} missing field: ${field}`);
+    }
+  }
+}
+
 const home = await mobileGet("/api/mobile/v1/home");
 if (!Array.isArray(home.featured)) throw new Error("/home featured is not an array");
 for (const [index, buffalo] of home.featured.entries()) {
   assertBuffaloCardShape(buffalo, `/home featured[${index}]`);
+}
+
+const newsEvents = await mobileGet("/api/mobile/v1/news-events");
+if (!Array.isArray(newsEvents.items)) throw new Error("/news-events items is not an array");
+for (const [index, item] of newsEvents.items.entries()) {
+  assertNewsEventShape(item, `/news-events items[${index}]`);
 }
 
 const list = await mobileGet("/api/mobile/v1/buffalos?page=1&sortBy=latest");
