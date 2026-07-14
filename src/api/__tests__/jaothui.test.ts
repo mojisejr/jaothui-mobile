@@ -1,8 +1,9 @@
-import { buildBuffaloQueryString, getNewsEvents } from "@/api/jaothui";
-import { mobileGet } from "@/api/client";
+import { buildBuffaloQueryString, getMe, getNewsEvents, getProfile } from "@/api/jaothui";
+import { mobileGet, mobileGetWithAuth } from "@/api/client";
 
 jest.mock("@/api/client", () => ({
   mobileGet: jest.fn(),
+  mobileGetWithAuth: jest.fn(),
 }));
 
 describe("buildBuffaloQueryString", () => {
@@ -38,5 +39,22 @@ describe("getNewsEvents", () => {
     await expect(getNewsEvents()).resolves.toEqual({ items: [] });
 
     expect(mobileGet).toHaveBeenCalledWith("/api/mobile/v1/news-events");
+  });
+});
+
+describe("profile API", () => {
+  it("uses v2 mobile account endpoints for authenticated profile calls", async () => {
+    (mobileGetWithAuth as jest.Mock).mockResolvedValueOnce({ identity: null }).mockResolvedValueOnce({
+      identity: null,
+      member: null,
+      ownedBuffalos: [],
+      counts: { ownedBuffalos: 0 },
+    });
+
+    await getMe("session-token");
+    await getProfile("session-token");
+
+    expect(mobileGetWithAuth).toHaveBeenNthCalledWith(1, "/api/mobile/v2/me", "session-token");
+    expect(mobileGetWithAuth).toHaveBeenNthCalledWith(2, "/api/mobile/v2/profile", "session-token");
   });
 });

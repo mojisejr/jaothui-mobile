@@ -1,9 +1,12 @@
 import {
   formatWalletAddress,
   getOwnedBuffaloPreview,
+  getLinkedWallet,
   getProfileContactLabel,
   getProfileDisplayName,
   getProfileStatusLabel,
+  getWalletLabel,
+  hasLinkedWallet,
 } from "@/features/profile/profileViewModel";
 import type { MobileProfile } from "@/types/mobile-api";
 
@@ -69,9 +72,32 @@ describe("profile view model", () => {
       },
     };
 
-    expect(getProfileDisplayName(profile)).toBe("NFT Holder");
+    expect(getProfileDisplayName(profile)).toBe("JAOTHUI Account");
     expect(getProfileStatusLabel(profile)).toBe("ผู้ถือใบพันธุ์ประวัติ");
     expect(getProfileContactLabel(profile)).toBe("wallet@example.com");
+  });
+
+  it("treats LINE-only as a valid logged-in account without wallet", () => {
+    const profile: MobileProfile = {
+      ...baseProfile,
+      identity: {
+        sessionVersion: 2,
+        accountId: "account_1",
+        lineUserId: "line-user-1",
+        email: "line@example.com",
+        displayName: "LINE Holder",
+        avatarUrl: null,
+        provider: "line",
+        linkedWallet: null,
+      },
+    };
+
+    expect(getProfileDisplayName(profile)).toBe("LINE Holder");
+    expect(getProfileStatusLabel(profile)).toBe("บัญชี LINE");
+    expect(getProfileContactLabel(profile)).toBe("line@example.com");
+    expect(getLinkedWallet(profile)).toBeNull();
+    expect(hasLinkedWallet(profile)).toBe(false);
+    expect(getWalletLabel(profile)).toBe("ยังไม่ได้ผูก");
   });
 
   it("bounds owned buffalo preview for profile scrolling", () => {

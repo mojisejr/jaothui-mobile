@@ -4,7 +4,7 @@ import {
   loadMobileSessionToken,
   saveMobileSession,
 } from "@/auth/sessionStorage";
-import type { MobileBitkubNextSession } from "@/types/mobile-api";
+import type { MobileBitkubNextSession, MobileLineAccountSession } from "@/types/mobile-api";
 
 function createStorage(initial: Record<string, string> = {}, available = true) {
   const values = { ...initial };
@@ -31,6 +31,21 @@ const session: MobileBitkubNextSession = {
   },
 };
 
+const lineSession: MobileLineAccountSession = {
+  sessionToken: "line-session-token",
+  expiresAt: 4_000_000_000,
+  identity: {
+    sessionVersion: 2,
+    accountId: "account_1",
+    lineUserId: "line-user-1",
+    email: "line@example.com",
+    displayName: "LINE Holder",
+    avatarUrl: "https://example.com/avatar.png",
+    provider: "line",
+    linkedWallet: null,
+  },
+};
+
 describe("mobile session storage", () => {
   it("saves and loads a valid session", async () => {
     const storage = createStorage();
@@ -39,6 +54,14 @@ describe("mobile session storage", () => {
 
     await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(session);
     await expect(loadMobileSessionToken(storage)).resolves.toBe("session-token");
+  });
+
+  it("saves and loads a valid LINE account session", async () => {
+    const storage = createStorage();
+
+    await saveMobileSession(lineSession, storage);
+
+    await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(lineSession);
   });
 
   it("compares API seconds-based expiry against device milliseconds", async () => {
@@ -66,6 +89,18 @@ describe("mobile session storage", () => {
     const invalidStorage = createStorage({ "jaothui.mobileSession.v1": "{bad json" });
     await expect(loadMobileSession(invalidStorage, 3_000_000)).resolves.toBeNull();
     expect(invalidStorage.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
+
+    const invalidLineStorage = createStorage({
+      "jaothui.mobileSession.v1": JSON.stringify({
+        ...lineSession,
+        identity: {
+          ...lineSession.identity,
+          linkedWallet: { provider: "bitkub-next", walletAddress: "" },
+        },
+      }),
+    });
+    await expect(loadMobileSession(invalidLineStorage, 3_000_000)).resolves.toBeNull();
+    expect(invalidLineStorage.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
   });
 
   it("clears the stored session explicitly", async () => {

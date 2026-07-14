@@ -2,7 +2,8 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
-import { openBitkubNextAuthSession } from "@/auth/bitkubNext";
+import { openBitkubNextWalletLinkSession } from "@/auth/bitkubNext";
+import { openLineAccountAuthSession } from "@/auth/lineAccount";
 import { clearMobileSession, loadMobileSession } from "@/auth/sessionStorage";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
@@ -10,22 +11,27 @@ import { SettingsRow } from "@/components/SettingsRow";
 import { Skeleton } from "@/components/Skeleton";
 import { StateBlock } from "@/components/StateBlock";
 import { colors, shadow, spacing, typography } from "@/design/tokens";
-import type { MobileBitkubNextSession, MobileProfile } from "@/types/mobile-api";
+import type { MobileProfile, MobileSession } from "@/types/mobile-api";
 import {
   formatWalletAddress,
+  getLinkedWallet,
   getOwnedBuffaloPreview,
+  getProfileAvatarUrl,
   getProfileContactLabel,
   getProfileDisplayName,
   getProfileStatusLabel,
+  getWalletLabel,
+  hasLinkedWallet,
 } from "./profileViewModel";
 
 type ProfileState =
   | { status: "checking" }
   | { status: "disconnected"; message?: string }
-  | { status: "connecting" }
-  | { status: "loading"; session: MobileBitkubNextSession }
-  | { status: "connected"; session: MobileBitkubNextSession; profile: MobileProfile }
-  | { status: "error"; message: string; session?: MobileBitkubNextSession };
+  | { status: "connectingLine" }
+  | { status: "loading"; session: MobileSession }
+  | { status: "connected"; session: MobileSession; profile: MobileProfile }
+  | { status: "linkingWallet"; session: MobileSession; profile: MobileProfile }
+  | { status: "error"; message: string; session?: MobileSession };
 
 const logoSource = require("@/assets/images/thuiLogo.png");
 
@@ -33,7 +39,7 @@ export function ProfileShell() {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>({ status: "checking" });
 
-  const loadProfileFromSession = useCallback(async (session: MobileBitkubNextSession) => {
+  const loadProfileFromSession = useCallback(async (session: MobileSession) => {
     setState({ status: "loading", session });
     try {
       const profile = await getProfile(session.sessionToken);
@@ -67,10 +73,10 @@ export function ProfileShell() {
     refresh();
   }, [refresh]);
 
-  const connect = useCallback(async () => {
-    setState({ status: "connecting" });
+  const connectLine = useCallback(async () => {
+    setState({ status: "connectingLine" });
     try {
-      const result = await openBitkubNextAuthSession();
+      const result = await openLineAccountAuthSession();
       if (!result.ok) {
         setState({ status: "disconnected", message: result.message });
         return;
@@ -79,10 +85,35 @@ export function ProfileShell() {
     } catch (error) {
       setState({
         status: "error",
-        message: error instanceof Error ? error.message : "เชื่อมต่อ Bitkub NEXT ไม่สำเร็จ",
+        message: error instanceof Error ? error.message : "เข้าสู่ระบบด้วย LINE ไม่สำเร็จ",
       });
     }
   }, [loadProfileFromSession]);
+
+  const linkWallet = useCallback(
+    async (session: MobileSession, profile: MobileProfile) => {
+      setState({ status: "linkingWallet", session, profile });
+      try {
+        const result = await openBitkubNextWalletLinkSession();
+        if (!result.ok) {
+          setState({
+            status: "error",
+            message: result.message,
+            session,
+          });
+          return;
+        }
+        await loadProfileFromSession(result.session);
+      } catch (error) {
+        setState({
+          status: "error",
+          message: error instanceof Error ? error.message : "ผูก Bitkub NEXT ไม่สำเร็จ",
+          session,
+        });
+      }
+    },
+    [loadProfileFromSession]
+  );
 
   const logout = useCallback(async () => {
     await clearMobileSession();
@@ -93,24 +124,28 @@ export function ProfileShell() {
     <AppShell activeTab="profile">
       {state.status === "checking" ? <ProfileSkeleton /> : null}
       {state.status === "disconnected" ? (
-        <DisconnectedProfile message={state.message} onConnect={connect} />
+        <DisconnectedProfile message={state.message} onConnect={connectLine} />
       ) : null}
-      {state.status === "connecting" ? (
-        <StateBlock title="กำลังเปิด Bitkub NEXT" message="ระบบกำลังพาคุณไปยืนยันตัวตนผ่านเบราว์เซอร์" />
+      {state.status === "connectingLine" ? (
+        <StateBlock title="กำลังเปิด LINE Login" message="ระบบกำลังพาคุณไปยืนยันบัญชีผ่านเบราว์เซอร์" />
       ) : null}
       {state.status === "loading" ? <ProfileSkeleton /> : null}
+      {state.status === "linkingWallet" ? (
+        <StateBlock title="กำลังผูก Bitkub NEXT" message="กำลังยืนยัน wallet และกลับมาอัปเดตโปรไฟล์" />
+      ) : null}
       {state.status === "error" ? (
         <StateBlock
           title="โหลดโปรไฟล์ไม่สำเร็จ"
           message={state.message}
-          actionLabel={state.session ? "ลองใหม่" : "เชื่อมต่อใหม่"}
-          onAction={() => (state.session ? loadProfileFromSession(state.session) : connect())}
+          actionLabel={state.session ? "ลองใหม่" : "เข้าสู่ระบบ"}
+          onAction={() => (state.session ? loadProfileFromSession(state.session) : connectLine())}
         />
       ) : null}
       {state.status === "connected" ? (
         <ConnectedProfile
           profile={state.profile}
           onLogout={logout}
+          onLinkWallet={() => linkWallet(state.session, state.profile)}
           onOpenBuffalo={(microchip) =>
             router.push({
               pathname: "/certs/[microchip]",
@@ -150,22 +185,23 @@ function DisconnectedProfile({ message, onConnect }: { message?: string; onConne
         <Image source={logoSource} style={styles.avatarImage} resizeMode="contain" />
         <View style={styles.headerText}>
           <Text style={styles.eyebrow}>โปรไฟล์</Text>
-          <Text style={styles.title}>เชื่อมต่อ Bitkub NEXT</Text>
+          <Text style={styles.title}>เข้าสู่ระบบด้วย LINE</Text>
           <Text style={styles.subtitle}>
-            เข้าสู่ระบบเพื่อดูข้อมูลสมาชิก ฟาร์ม กระเป๋า และควายของคุณใน JAOTHUI
+            ใช้บัญชี LINE เป็นบัญชีหลัก แล้วค่อยผูก Bitkub NEXT เมื่อพร้อมดูข้อมูล wallet
           </Text>
         </View>
       </View>
 
       <StateBlock
-        title="ยังไม่ได้เชื่อมต่อ"
-        message={message || "เชื่อมต่อผ่าน Bitkub NEXT เพื่อโหลดโปรไฟล์เดียวกับหน้าเว็บ JAOTHUI"}
-        actionLabel="เชื่อมต่อ Bitkub NEXT"
+        title="ยังไม่ได้เข้าสู่ระบบ"
+        message={message || "เข้าสู่ระบบด้วย LINE เพื่อใช้งานโปรไฟล์ JAOTHUI บนมือถือ"}
+        actionLabel="เข้าสู่ระบบด้วย LINE"
         onAction={onConnect}
       />
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>บัญชีและฟาร์ม</Text>
+        <SettingsRow label="บัญชี LINE" />
         <SettingsRow label="ข้อมูลสมาชิก" />
         <SettingsRow label="ข้อมูลฟาร์ม" />
         <SettingsRow label="กระเป๋า Bitkub NEXT" />
@@ -176,10 +212,12 @@ function DisconnectedProfile({ message, onConnect }: { message?: string; onConne
 
 function ConnectedProfile({
   onLogout,
+  onLinkWallet,
   onOpenBuffalo,
   profile,
 }: {
   onLogout: () => void;
+  onLinkWallet: () => void;
   onOpenBuffalo: (microchip: string) => void;
   profile: MobileProfile;
 }) {
@@ -187,8 +225,11 @@ function ConnectedProfile({
   const displayName = getProfileDisplayName(profile);
   const statusLabel = getProfileStatusLabel(profile);
   const contactLabel = getProfileContactLabel(profile);
-  const avatarUrl = profile.member?.avatarUrl;
-  const walletLabel = formatWalletAddress(profile.identity.walletAddress);
+  const avatarUrl = getProfileAvatarUrl(profile);
+  const linkedWallet = getLinkedWallet(profile);
+  const walletLabel = getWalletLabel(profile);
+  const isLineAccount = profile.identity.provider === "line";
+  const walletLinked = hasLinkedWallet(profile);
 
   return (
     <>
@@ -201,7 +242,7 @@ function ConnectedProfile({
           )}
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>Bitkub NEXT</Text>
+          <Text style={styles.eyebrow}>{isLineAccount ? "LINE Account" : "Bitkub NEXT"}</Text>
           <Text style={styles.title} numberOfLines={2}>
             {displayName}
           </Text>
@@ -218,6 +259,7 @@ function ConnectedProfile({
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>บัญชีและฟาร์ม</Text>
+        {isLineAccount ? <SettingsRow disabled={false} label="บัญชี LINE" right="เข้าสู่ระบบแล้ว" /> : null}
         <SettingsRow disabled={false} label="กระเป๋า Bitkub NEXT" right={walletLabel} />
         <SettingsRow
           disabled={false}
@@ -227,10 +269,25 @@ function ConnectedProfile({
         <SettingsRow disabled={false} label="ข้อมูลฟาร์ม" right={profile.member?.farmName || "ยังไม่มีฟาร์ม"} />
       </View>
 
+      {isLineAccount && !walletLinked ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Bitkub NEXT</Text>
+          <Text style={styles.panelMessage}>
+            บัญชี LINE พร้อมใช้งานแล้ว หากมี wallet ให้ผูก Bitkub NEXT เพื่อโหลดข้อมูลสมาชิก ฟาร์ม และควายที่ถืออยู่
+          </Text>
+          <Pressable style={styles.linkButton} onPress={onLinkWallet}>
+            <Text style={styles.linkText}>ผูก Bitkub NEXT</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.sectionHeader}>
         <View>
           <Text style={styles.sectionTitleLarge}>ควายของฉัน</Text>
-          <Text style={styles.sectionCaption}>{profile.counts.ownedBuffalos} รายการในบัญชีนี้</Text>
+          <Text style={styles.sectionCaption}>
+            {profile.counts.ownedBuffalos} รายการในบัญชีนี้
+            {linkedWallet ? ` · ${formatWalletAddress(linkedWallet.walletAddress)}` : ""}
+          </Text>
         </View>
       </View>
 
@@ -243,7 +300,11 @@ function ConnectedProfile({
       ) : (
         <StateBlock
           title="ยังไม่พบควายในบัญชีนี้"
-          message="บัญชีนี้เชื่อมต่อแล้ว แต่ยังไม่มีข้อมูลควายที่ผูกกับโปรไฟล์ JAOTHUI"
+          message={
+            walletLinked
+              ? "บัญชีนี้เชื่อมต่อแล้ว แต่ยังไม่มีข้อมูลควายที่ผูกกับโปรไฟล์ JAOTHUI"
+              : "บัญชี LINE นี้ยังไม่ได้ผูก Bitkub NEXT จึงยังไม่แสดงข้อมูลควายจาก wallet"
+          }
         />
       )}
 
@@ -400,6 +461,28 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: colors.gold,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  panelMessage: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  linkButton: {
+    alignItems: "center",
+    backgroundColor: colors.gold,
+    borderRadius: spacing.pillRadius,
+    justifyContent: "center",
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.lg,
+  },
+  linkText: {
+    color: colors.background,
     fontSize: 14,
     fontWeight: "900",
   },
