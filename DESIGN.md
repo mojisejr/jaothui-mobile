@@ -99,7 +99,7 @@ primitives:
     variants: [default, disabled, danger]
   - name: ProfileShell
     file: src/features/profile/ProfileShell.tsx
-    variants: [disabled]
+    variants: [disconnected, line-only, line-linked, legacy-bitkub, error]
 patterns:
   - layered-token-architecture
   - tinted-shadow-glow
@@ -115,9 +115,9 @@ This is the native mobile design contract for `jaothui-mobile`. The web v2 contr
 language becomes an Expo / React Native product experience without copying Tailwind, browser layout,
 or web-only auth behavior.
 
-Round 1 is the public journey only: Home, the center-logo Cert/Buffalo journey, Cert detail with
-certificate image actions, and a disabled Profile shell. Real auth, wallet, member profile, store,
-game, privilege, order, and farm-management flows are deferred.
+Round 1 started as the public journey only. The current profile contract is LINE-first account
+login with optional Bitkub NEXT wallet linking. Store, game, privilege, order, and farm-management
+flows are still deferred.
 
 ## 1. Visual Theme & Atmosphere
 
@@ -213,8 +213,9 @@ mobile controls, not web buttons pasted into RN.
   action button but must not create nested cards.
 - `Skeleton`: subtle pulse using `colors.skeletonBase` and `colors.skeletonHighlight`; no bright
   shimmer bars.
-- `SettingsRow` / `ProfileShell`: disabled information architecture only. It may show coming-soon
-  copy and disabled rows; it must not start OAuth, wallet connection, or credential capture.
+- `SettingsRow` / `ProfileShell`: account utility surface. LINE is the primary login/account
+  identity; Bitkub NEXT is an optional linked wallet panel after LINE login. LINE-only is a valid
+  connected state and must not be treated as disconnected.
 
 ## 5. Layout Principles
 
@@ -235,7 +236,8 @@ Screen rules:
   `ScrollView`.
 - Cert detail may use `ScrollView`, but image and certificate sections should have fixed aspect
   ratios to avoid jumpy layout.
-- Profile shell is reachable from bottom nav and visually complete, but functionally disabled.
+- Profile shell is reachable from bottom nav and supports disconnected, LINE-only, LINE-linked,
+  legacy Bitkub, loading, and error states.
 - Avoid card-in-card nesting. If a grouped section needs structure, use rows/dividers inside one
   surface or an unframed layout.
 
@@ -258,12 +260,12 @@ Do:
 - preserve the accepted stutter-gate decision: `FlatList`, stable keys, batched rendering, memoized
   cards;
 - use real buffalo/certificate imagery where available;
-- make disabled Profile feel deliberate, not broken;
+- make LINE-only Profile feel complete, not broken;
 - keep animation light and useful.
 
 Do not:
 - copy Tailwind classes or web breakpoints into RN;
-- wire Bitkub NEXT, wallet, member profile, or auth in this mission;
+- make Bitkub NEXT the primary login identity;
 - replace virtualized list screens with nested `ScrollView` grids;
 - add decorative gradient orbs or stock-like imagery;
 - put cards inside cards;
@@ -291,11 +293,12 @@ for this mission.
 ## 9. Agent Prompt Guide
 
 > Build JAOTHUI mobile UI from `src/design/tokens.ts` and this `DESIGN.md`. Use web v2 as the
-> visual source, but implement native RN primitives. Public journey only: Home, center-logo
-> Cert/Buffalo journey, Cert detail/certificate image, and disabled Profile shell. Preserve
-> `FlatList` virtualization and the Samsung Flip7 stutter-gate decisions. Do not wire auth, wallet,
-> or web-only tRPC/Bitkub logic. Use `bun run validate` for deterministic checks, RN Web for rendered
-> route evidence after UI changes, and Expo Go device confirmation only when the phase asks for it.
+> visual source, but implement native RN primitives. Public journey includes Home, center-logo
+> Cert/Buffalo journey, Cert detail/certificate image, and a LINE-first Profile shell with optional
+> Bitkub NEXT wallet linking. Preserve `FlatList` virtualization and the Samsung Flip7 stutter-gate
+> decisions. Do not import web-only tRPC/Bitkub React SDK logic into RN. Use `bun run validate` for
+> deterministic checks, RN Web for rendered route evidence after UI changes, and Expo Go/device
+> confirmation only when the phase asks for it.
 
 ## Primitives (Reuse-First)
 
@@ -312,7 +315,7 @@ for this mission.
 | `StateBlock` | `src/components/StateBlock.tsx` | exists, upgrade | loading/empty/error/unavailable |
 | `Skeleton` | `src/components/Skeleton.tsx` | to build | loading placeholders |
 | `SettingsRow` | `src/components/SettingsRow.tsx` | exists | profile shell rows |
-| `ProfileShell` | `src/features/profile/ProfileShell.tsx` | exists | disabled IA shell |
+| `ProfileShell` | `src/features/profile/ProfileShell.tsx` | exists | LINE-first account and optional wallet link shell |
 
 Reuse before create. If a primitive exists, upgrade it in place unless the phase explicitly calls for
 a new component.
@@ -340,8 +343,11 @@ a new component.
 
 ### Profile Shell
 - Reachable from bottom nav.
-- Disabled and visually aligned with web profile.
-- No OAuth, wallet, member data, credential prompts, or mutation.
+- LINE is the primary account login.
+- Bitkub NEXT is optional wallet linking after LINE login.
+- LINE-only renders as a connected account with a wallet-link panel.
+- LINE-linked and legacy Bitkub sessions may show wallet/member/buffalo data.
+- OAuth is mediated through the mobile BFF; provider tokens must not be stored in the app.
 
 ## Animation Rules
 

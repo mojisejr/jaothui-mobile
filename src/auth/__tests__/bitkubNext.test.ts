@@ -23,6 +23,14 @@ describe("Bitkub NEXT mobile auth helpers", () => {
     expect(parseBitkubNextCallbackUrl("jaothui://oauth/callback?handoff=abc123")).toEqual({
       ok: true,
       handoff: "abc123",
+      purpose: "login",
+    });
+    expect(
+      parseBitkubNextCallbackUrl("jaothui://oauth/callback?provider=bitkub-next&purpose=link&handoff=abc123")
+    ).toEqual({
+      ok: true,
+      handoff: "abc123",
+      purpose: "link",
     });
   });
 

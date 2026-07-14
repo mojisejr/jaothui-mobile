@@ -1,5 +1,9 @@
 import * as SecureStore from "expo-secure-store";
-import type { MobileBitkubNextSession } from "@/types/mobile-api";
+import type {
+  MobileBitkubNextSession,
+  MobileLineAccountSession,
+  MobileSession,
+} from "@/types/mobile-api";
 
 const SESSION_KEY = "jaothui.mobileSession.v1";
 
@@ -30,9 +34,41 @@ function isMobileBitkubNextSession(value: unknown): value is MobileBitkubNextSes
     typeof candidate.sessionToken === "string" &&
     typeof candidate.expiresAt === "number" &&
     !!candidate.identity &&
+    (candidate.identity.sessionVersion === undefined || candidate.identity.sessionVersion === 1) &&
     typeof candidate.identity.walletAddress === "string" &&
     candidate.identity.provider === "bitkub-next"
   );
+}
+
+function isMobileLineAccountSession(value: unknown): value is MobileLineAccountSession {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<MobileLineAccountSession>;
+  const identity = candidate.identity;
+  if (
+    typeof candidate.sessionToken !== "string" ||
+    typeof candidate.expiresAt !== "number" ||
+    !identity ||
+    identity.sessionVersion !== 2 ||
+    identity.provider !== "line" ||
+    typeof identity.accountId !== "string" ||
+    !identity.accountId.trim() ||
+    typeof identity.lineUserId !== "string" ||
+    !identity.lineUserId.trim()
+  ) {
+    return false;
+  }
+
+  if (identity.linkedWallet === null) return true;
+  return (
+    !!identity.linkedWallet &&
+    identity.linkedWallet.provider === "bitkub-next" &&
+    typeof identity.linkedWallet.walletAddress === "string" &&
+    !!identity.linkedWallet.walletAddress.trim()
+  );
+}
+
+function isMobileSession(value: unknown): value is MobileSession {
+  return isMobileBitkubNextSession(value) || isMobileLineAccountSession(value);
 }
 
 function toUnixSeconds(nowMs: number) {
@@ -40,7 +76,7 @@ function toUnixSeconds(nowMs: number) {
 }
 
 export async function saveMobileSession(
-  session: MobileBitkubNextSession,
+  session: MobileSession,
   storage: SecureStoreAdapter = SecureStore
 ) {
   await assertStorageAvailable(storage);
@@ -54,14 +90,14 @@ export async function clearMobileSession(storage: SecureStoreAdapter = SecureSto
 export async function loadMobileSession(
   storage: SecureStoreAdapter = SecureStore,
   nowMs = Date.now()
-): Promise<MobileBitkubNextSession | null> {
+): Promise<MobileSession | null> {
   await assertStorageAvailable(storage);
   const raw = await storage.getItemAsync(SESSION_KEY);
   if (!raw) return null;
 
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!isMobileBitkubNextSession(parsed)) {
+    if (!isMobileSession(parsed)) {
       await clearMobileSession(storage);
       return null;
     }

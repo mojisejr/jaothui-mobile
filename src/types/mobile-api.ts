@@ -136,6 +136,7 @@ export type MobileCertificateImage = {
 };
 
 export type MobileBitkubNextIdentity = {
+  sessionVersion?: 1;
   walletAddress: string;
   email: string | null;
   provider: "bitkub-next";
@@ -147,10 +148,39 @@ export type MobileBitkubNextSession = {
   identity: MobileBitkubNextIdentity;
 };
 
-export type MobileMe = MobileBitkubNextIdentity;
+export type MobileLinkedWalletIdentity = {
+  walletAddress: string;
+  email: string | null;
+  provider: "bitkub-next";
+};
+
+export type MobileLineAccountIdentity = {
+  sessionVersion: 2;
+  accountId: string;
+  lineUserId: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  provider: "line";
+  linkedWallet: MobileLinkedWalletIdentity | null;
+};
+
+export type MobileLineAccountSession = {
+  sessionToken: string;
+  expiresAt: number;
+  identity: MobileLineAccountIdentity;
+};
+
+export type MobileSession = MobileBitkubNextSession | MobileLineAccountSession;
+
+export type MobileAccountIdentity = MobileBitkubNextIdentity | MobileLineAccountIdentity;
+
+export type MobileMe = {
+  identity: MobileAccountIdentity;
+};
 
 export type MobileProfile = {
-  identity: MobileBitkubNextIdentity;
+  identity: MobileAccountIdentity;
   member: {
     id: string | number;
     name: string | null;

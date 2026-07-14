@@ -77,6 +77,14 @@ export function mobilePost<T>(path: string, body: unknown): Promise<T> {
   return mobileRequest<T>(path, { method: "POST", body });
 }
 
+export function mobilePostWithAuth<T>(
+  path: string,
+  body: unknown,
+  bearerToken?: string | null
+): Promise<T> {
+  return mobileRequest<T>(path, { method: "POST", body, bearerToken });
+}
+
 export function mobileGetWithAuth<T>(path: string, bearerToken?: string | null): Promise<T> {
   return mobileRequest<T>(path, { bearerToken });
 }
