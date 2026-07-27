@@ -109,6 +109,27 @@ export function ProfileShell() {
     }
   }, [loadProfileFromSession]);
 
+  const attachAppleToCurrentAccount = useCallback(
+    async (session: MobileSession, profile: MobileProfile) => {
+      setState({ status: "connectingApple" });
+      try {
+        const result = await openAppleAccountAuthSession({ attachToCurrentAccount: true });
+        if (!result.ok) {
+          setState({ status: "connected", session, profile });
+          return;
+        }
+        await loadProfileFromSession(result.session);
+      } catch (error) {
+        setState({
+          status: "error",
+          message: error instanceof Error ? error.message : "เชื่อมต่อ Apple กับบัญชีนี้ไม่สำเร็จ",
+          session,
+        });
+      }
+    },
+    [loadProfileFromSession]
+  );
+
   const connectLine = useCallback(async () => {
     setState({ status: "connectingLine" });
     try {
@@ -187,9 +208,11 @@ export function ProfileShell() {
       ) : null}
       {state.status === "connected" ? (
         <ConnectedProfile
+          appleAvailable={appleAvailable}
           profile={state.profile}
           onLogout={logout}
           onLinkWallet={() => linkWallet(state.session, state.profile)}
+          onAttachApple={() => attachAppleToCurrentAccount(state.session, state.profile)}
           onOpenBuffalo={(microchip) =>
             router.push({
               pathname: "/certs/[microchip]",
@@ -280,11 +303,15 @@ function DisconnectedProfile({
 }
 
 function ConnectedProfile({
+  appleAvailable,
+  onAttachApple,
   onLogout,
   onLinkWallet,
   onOpenBuffalo,
   profile,
 }: {
+  appleAvailable: boolean;
+  onAttachApple: () => void;
   onLogout: () => void;
   onLinkWallet: () => void;
   onOpenBuffalo: (microchip: string) => void;
@@ -349,6 +376,18 @@ function ConnectedProfile({
         />
         <SettingsRow disabled={false} label="ข้อมูลฟาร์ม" right={profile.member?.farmName || "ยังไม่มีฟาร์ม"} />
       </View>
+
+      {profile.identity.provider === "line" && appleAvailable ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>เชื่อมต่อบัญชี</Text>
+          <Text style={styles.panelMessage}>
+            เชื่อมต่อ Apple กับบัญชี LINE นี้เพื่อให้เข้าได้ทั้งสองวิธีและเห็น wallet เดียวกัน
+          </Text>
+          <Pressable style={styles.linkButton} onPress={onAttachApple}>
+            <Text style={styles.linkText}>เชื่อมต่อ Apple</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {isJaothuiAccount && !walletLinked ? (
         <View style={styles.card}>

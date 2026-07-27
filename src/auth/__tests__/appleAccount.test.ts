@@ -78,6 +78,27 @@ describe("Apple account auth helpers", () => {
     );
   });
 
+  it("uses the current JAOTHUI account session only when attaching Apple", async () => {
+    (loadMobileSession as jest.Mock).mockResolvedValue(appleSession);
+
+    await expect(
+      redeemAppleIdentityToken({
+        identityToken: "identity-token",
+        attachToCurrentAccount: true,
+      })
+    ).resolves.toEqual(appleSession);
+
+    expect(mobilePostWithAuth).toHaveBeenCalledWith(
+      "/api/mobile/v2/auth/apple/session",
+      {
+        identityToken: "identity-token",
+        email: null,
+        displayName: null,
+      },
+      "apple-session-token"
+    );
+  });
+
   it("saves a session after completing an Apple credential", async () => {
     await expect(
       completeAppleAccountCredential({

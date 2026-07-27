@@ -216,8 +216,9 @@ mobile controls, not web buttons pasted into RN.
   shimmer bars.
 - `SettingsRow` / `ProfileShell`: account utility surface. iOS offers native Sign in with Apple
   and LINE as JAOTHUI account identities; Bitkub NEXT is an optional linked wallet panel after
-  account login. LINE-only and Apple-only are valid connected states and must not be treated as
-  disconnected.
+  account login. A connected LINE account on iOS can explicitly connect Apple so both identities
+  share one JAOTHUI account and wallet; this must never be an email-based merge. LINE-only and
+  Apple-only are valid connected states and must not be treated as disconnected.
 
 ## 5. Layout Principles
 
