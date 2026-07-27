@@ -1,7 +1,9 @@
+import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
+import { isAppleAccountAuthAvailable, openAppleAccountAuthSession } from "@/auth/appleAccount";
 import { openBitkubNextWalletLinkSession } from "@/auth/bitkubNext";
 import { openLineAccountAuthSession } from "@/auth/lineAccount";
 import { clearMobileSession, loadMobileSession } from "@/auth/sessionStorage";
@@ -27,6 +29,7 @@ import {
 type ProfileState =
   | { status: "checking" }
   | { status: "disconnected"; message?: string }
+  | { status: "connectingApple" }
   | { status: "connectingLine" }
   | { status: "loading"; session: MobileSession }
   | { status: "connected"; session: MobileSession; profile: MobileProfile }
@@ -38,6 +41,7 @@ const logoSource = require("@/assets/images/thuiLogo.png");
 export function ProfileShell() {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>({ status: "checking" });
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   const loadProfileFromSession = useCallback(async (session: MobileSession) => {
     setState({ status: "loading", session });
@@ -72,6 +76,38 @@ export function ProfileShell() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+    isAppleAccountAuthAvailable()
+      .then((available) => {
+        if (active) setAppleAvailable(available);
+      })
+      .catch(() => {
+        if (active) setAppleAvailable(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const connectApple = useCallback(async () => {
+    setState({ status: "connectingApple" });
+    try {
+      const result = await openAppleAccountAuthSession();
+      if (!result.ok) {
+        setState({ status: "disconnected", message: result.message });
+        return;
+      }
+      await loadProfileFromSession(result.session);
+    } catch (error) {
+      setState({
+        status: "error",
+        message: error instanceof Error ? error.message : "เข้าสู่ระบบด้วย Apple ไม่สำเร็จ",
+      });
+    }
+  }, [loadProfileFromSession]);
 
   const connectLine = useCallback(async () => {
     setState({ status: "connectingLine" });
@@ -124,7 +160,15 @@ export function ProfileShell() {
     <AppShell activeTab="profile">
       {state.status === "checking" ? <ProfileSkeleton /> : null}
       {state.status === "disconnected" ? (
-        <DisconnectedProfile message={state.message} onConnect={connectLine} />
+        <DisconnectedProfile
+          appleAvailable={appleAvailable}
+          message={state.message}
+          onConnectApple={connectApple}
+          onConnectLine={connectLine}
+        />
+      ) : null}
+      {state.status === "connectingApple" ? (
+        <StateBlock title="กำลังเปิด Sign in with Apple" message="ระบบกำลังพาคุณไปยืนยันบัญชีด้วย Apple" />
       ) : null}
       {state.status === "connectingLine" ? (
         <StateBlock title="กำลังเปิด LINE Login" message="ระบบกำลังพาคุณไปยืนยันบัญชีผ่านเบราว์เซอร์" />
@@ -138,7 +182,7 @@ export function ProfileShell() {
           title="โหลดโปรไฟล์ไม่สำเร็จ"
           message={state.message}
           actionLabel={state.session ? "ลองใหม่" : "เข้าสู่ระบบ"}
-          onAction={() => (state.session ? loadProfileFromSession(state.session) : connectLine())}
+          onAction={() => (state.session ? loadProfileFromSession(state.session) : appleAvailable ? connectApple() : connectLine())}
         />
       ) : null}
       {state.status === "connected" ? (
@@ -178,29 +222,54 @@ function ProfileSkeleton() {
   );
 }
 
-function DisconnectedProfile({ message, onConnect }: { message?: string; onConnect: () => void }) {
+function DisconnectedProfile({
+  appleAvailable,
+  message,
+  onConnectApple,
+  onConnectLine,
+}: {
+  appleAvailable: boolean;
+  message?: string;
+  onConnectApple: () => void;
+  onConnectLine: () => void;
+}) {
   return (
     <>
       <View style={styles.header}>
         <Image source={logoSource} style={styles.avatarImage} resizeMode="contain" />
         <View style={styles.headerText}>
           <Text style={styles.eyebrow}>โปรไฟล์</Text>
-          <Text style={styles.title}>เข้าสู่ระบบด้วย LINE</Text>
+          <Text style={styles.title}>เข้าสู่ระบบ JAOTHUI</Text>
           <Text style={styles.subtitle}>
-            ใช้บัญชี LINE เป็นบัญชีหลัก แล้วค่อยผูก Bitkub NEXT เมื่อพร้อมดูข้อมูล wallet
+            เลือก Apple หรือ LINE เพื่อใช้งานโปรไฟล์ แล้วผูก Bitkub NEXT เมื่อพร้อมดูข้อมูลสมาชิก ฟาร์ม และควาย
           </Text>
         </View>
       </View>
 
       <StateBlock
         title="ยังไม่ได้เข้าสู่ระบบ"
-        message={message || "เข้าสู่ระบบด้วย LINE เพื่อใช้งานโปรไฟล์ JAOTHUI บนมือถือ"}
-        actionLabel="เข้าสู่ระบบด้วย LINE"
-        onAction={onConnect}
+        message={message || "เข้าสู่ระบบเพื่อใช้งานโปรไฟล์ JAOTHUI บนมือถือ"}
       />
+
+      <View style={styles.authActions}>
+        {appleAvailable ? (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            cornerRadius={12}
+            onPress={onConnectApple}
+            style={styles.appleButton}
+          />
+        ) : null}
+        <Pressable style={styles.lineButton} onPress={onConnectLine}>
+          <Text style={styles.lineButtonText}>เข้าสู่ระบบด้วย LINE</Text>
+        </Pressable>
+        <Text style={styles.authHint}>Bitkub NEXT ใช้สำหรับผูก wallet หลังเข้าสู่ระบบ</Text>
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>บัญชีและฟาร์ม</Text>
+        {appleAvailable ? <SettingsRow label="บัญชี Apple" /> : null}
         <SettingsRow label="บัญชี LINE" />
         <SettingsRow label="ข้อมูลสมาชิก" />
         <SettingsRow label="ข้อมูลฟาร์ม" />
@@ -228,7 +297,14 @@ function ConnectedProfile({
   const avatarUrl = getProfileAvatarUrl(profile);
   const linkedWallet = getLinkedWallet(profile);
   const walletLabel = getWalletLabel(profile);
-  const isLineAccount = profile.identity.provider === "line";
+  const isJaothuiAccount =
+    profile.identity.provider === "line" || profile.identity.provider === "apple";
+  const providerLabel =
+    profile.identity.provider === "apple"
+      ? "Apple Account"
+      : profile.identity.provider === "line"
+        ? "LINE Account"
+        : "Bitkub NEXT";
   const walletLinked = hasLinkedWallet(profile);
 
   return (
@@ -242,7 +318,7 @@ function ConnectedProfile({
           )}
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>{isLineAccount ? "LINE Account" : "Bitkub NEXT"}</Text>
+          <Text style={styles.eyebrow}>{providerLabel}</Text>
           <Text style={styles.title} numberOfLines={2}>
             {displayName}
           </Text>
@@ -259,7 +335,12 @@ function ConnectedProfile({
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>บัญชีและฟาร์ม</Text>
-        {isLineAccount ? <SettingsRow disabled={false} label="บัญชี LINE" right="เข้าสู่ระบบแล้ว" /> : null}
+        {profile.identity.provider === "apple" ? (
+          <SettingsRow disabled={false} label="บัญชี Apple" right="เข้าสู่ระบบแล้ว" />
+        ) : null}
+        {profile.identity.provider === "line" ? (
+          <SettingsRow disabled={false} label="บัญชี LINE" right="เข้าสู่ระบบแล้ว" />
+        ) : null}
         <SettingsRow disabled={false} label="กระเป๋า Bitkub NEXT" right={walletLabel} />
         <SettingsRow
           disabled={false}
@@ -269,11 +350,11 @@ function ConnectedProfile({
         <SettingsRow disabled={false} label="ข้อมูลฟาร์ม" right={profile.member?.farmName || "ยังไม่มีฟาร์ม"} />
       </View>
 
-      {isLineAccount && !walletLinked ? (
+      {isJaothuiAccount && !walletLinked ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Bitkub NEXT</Text>
           <Text style={styles.panelMessage}>
-            บัญชี LINE พร้อมใช้งานแล้ว หากมี wallet ให้ผูก Bitkub NEXT เพื่อโหลดข้อมูลสมาชิก ฟาร์ม และควายที่ถืออยู่
+            บัญชี JAOTHUI พร้อมใช้งานแล้ว หากมี wallet ให้ผูก Bitkub NEXT เพื่อโหลดข้อมูลสมาชิก ฟาร์ม และควายที่ถืออยู่
           </Text>
           <Pressable style={styles.linkButton} onPress={onLinkWallet}>
             <Text style={styles.linkText}>ผูก Bitkub NEXT</Text>
@@ -303,7 +384,7 @@ function ConnectedProfile({
           message={
             walletLinked
               ? "บัญชีนี้เชื่อมต่อแล้ว แต่ยังไม่มีข้อมูลควายที่ผูกกับโปรไฟล์ JAOTHUI"
-              : "บัญชี LINE นี้ยังไม่ได้ผูก Bitkub NEXT จึงยังไม่แสดงข้อมูลควายจาก wallet"
+              : "บัญชี JAOTHUI นี้ยังไม่ได้ผูก Bitkub NEXT จึงยังไม่แสดงข้อมูลควายจาก wallet"
           }
         />
       )}
@@ -413,6 +494,38 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: 12,
     fontWeight: "900",
+  },
+  authActions: {
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: spacing.cardRadius,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
+  appleButton: {
+    height: 48,
+    width: "100%",
+  },
+  lineButton: {
+    alignItems: "center",
+    backgroundColor: colors.gold,
+    borderRadius: spacing.pillRadius,
+    justifyContent: "center",
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.lg,
+  },
+  lineButtonText: {
+    color: colors.background,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  authHint: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
   },
   card: {
     overflow: "hidden",

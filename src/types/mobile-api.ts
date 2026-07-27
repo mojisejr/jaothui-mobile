@@ -154,26 +154,48 @@ export type MobileLinkedWalletIdentity = {
   provider: "bitkub-next";
 };
 
-export type MobileLineAccountIdentity = {
+export type MobileAccountProvider = "line" | "apple";
+
+export type MobileAccountSessionIdentity = {
   sessionVersion: 2;
   accountId: string;
-  lineUserId: string;
+  providerUserId: string;
+  lineUserId?: string;
+  appleUserId?: string;
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
-  provider: "line";
+  provider: MobileAccountProvider;
   linkedWallet: MobileLinkedWalletIdentity | null;
 };
 
-export type MobileLineAccountSession = {
+export type MobileLineAccountIdentity = MobileAccountSessionIdentity & {
+  provider: "line";
+  lineUserId: string;
+};
+
+export type MobileAppleAccountIdentity = MobileAccountSessionIdentity & {
+  provider: "apple";
+  appleUserId: string;
+};
+
+export type MobileAccountSession = {
   sessionToken: string;
   expiresAt: number;
+  identity: MobileAccountSessionIdentity;
+};
+
+export type MobileLineAccountSession = MobileAccountSession & {
   identity: MobileLineAccountIdentity;
 };
 
-export type MobileSession = MobileBitkubNextSession | MobileLineAccountSession;
+export type MobileAppleAccountSession = MobileAccountSession & {
+  identity: MobileAppleAccountIdentity;
+};
 
-export type MobileAccountIdentity = MobileBitkubNextIdentity | MobileLineAccountIdentity;
+export type MobileSession = MobileBitkubNextSession | MobileAccountSession;
+
+export type MobileAccountIdentity = MobileBitkubNextIdentity | MobileAccountSessionIdentity;
 
 export type MobileMe = {
   identity: MobileAccountIdentity;
