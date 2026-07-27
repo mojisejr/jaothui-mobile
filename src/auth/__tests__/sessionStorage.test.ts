@@ -4,7 +4,11 @@ import {
   loadMobileSessionToken,
   saveMobileSession,
 } from "@/auth/sessionStorage";
-import type { MobileBitkubNextSession, MobileLineAccountSession } from "@/types/mobile-api";
+import type {
+  MobileAppleAccountSession,
+  MobileBitkubNextSession,
+  MobileLineAccountSession,
+} from "@/types/mobile-api";
 
 function createStorage(initial: Record<string, string> = {}, available = true) {
   const values = { ...initial };
@@ -37,11 +41,28 @@ const lineSession: MobileLineAccountSession = {
   identity: {
     sessionVersion: 2,
     accountId: "account_1",
+    providerUserId: "line-user-1",
     lineUserId: "line-user-1",
     email: "line@example.com",
     displayName: "LINE Holder",
     avatarUrl: "https://example.com/avatar.png",
     provider: "line",
+    linkedWallet: null,
+  },
+};
+
+const appleSession: MobileAppleAccountSession = {
+  sessionToken: "apple-session-token",
+  expiresAt: 4_000_000_000,
+  identity: {
+    sessionVersion: 2,
+    accountId: "account_apple",
+    providerUserId: "apple-sub-1",
+    appleUserId: "apple-sub-1",
+    email: "apple@example.com",
+    displayName: "Apple Holder",
+    avatarUrl: null,
+    provider: "apple",
     linkedWallet: null,
   },
 };
@@ -62,6 +83,14 @@ describe("mobile session storage", () => {
     await saveMobileSession(lineSession, storage);
 
     await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(lineSession);
+  });
+
+  it("saves and loads a valid Apple account session", async () => {
+    const storage = createStorage();
+
+    await saveMobileSession(appleSession, storage);
+
+    await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(appleSession);
   });
 
   it("compares API seconds-based expiry against device milliseconds", async () => {

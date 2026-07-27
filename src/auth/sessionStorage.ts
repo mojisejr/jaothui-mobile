@@ -1,7 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import type {
+  MobileAccountSession,
   MobileBitkubNextSession,
-  MobileLineAccountSession,
   MobileSession,
 } from "@/types/mobile-api";
 
@@ -40,20 +40,34 @@ function isMobileBitkubNextSession(value: unknown): value is MobileBitkubNextSes
   );
 }
 
-function isMobileLineAccountSession(value: unknown): value is MobileLineAccountSession {
+function isMobileAccountSession(value: unknown): value is MobileAccountSession {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<MobileLineAccountSession>;
+  const candidate = value as Partial<MobileAccountSession>;
   const identity = candidate.identity;
   if (
     typeof candidate.sessionToken !== "string" ||
     typeof candidate.expiresAt !== "number" ||
     !identity ||
     identity.sessionVersion !== 2 ||
-    identity.provider !== "line" ||
+    (identity.provider !== "line" && identity.provider !== "apple") ||
     typeof identity.accountId !== "string" ||
     !identity.accountId.trim() ||
-    typeof identity.lineUserId !== "string" ||
-    !identity.lineUserId.trim()
+    typeof identity.providerUserId !== "string" ||
+    !identity.providerUserId.trim()
+  ) {
+    return false;
+  }
+
+  if (
+    identity.provider === "line" &&
+    (typeof identity.lineUserId !== "string" || !identity.lineUserId.trim())
+  ) {
+    return false;
+  }
+
+  if (
+    identity.provider === "apple" &&
+    (typeof identity.appleUserId !== "string" || !identity.appleUserId.trim())
   ) {
     return false;
   }
@@ -68,7 +82,7 @@ function isMobileLineAccountSession(value: unknown): value is MobileLineAccountS
 }
 
 function isMobileSession(value: unknown): value is MobileSession {
-  return isMobileBitkubNextSession(value) || isMobileLineAccountSession(value);
+  return isMobileBitkubNextSession(value) || isMobileAccountSession(value);
 }
 
 function toUnixSeconds(nowMs: number) {

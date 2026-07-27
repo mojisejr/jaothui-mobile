@@ -1,7 +1,7 @@
 import * as WebBrowser from "expo-web-browser";
 import { API_BASE_URL, mobilePost, mobilePostWithAuth } from "@/api/client";
 import { loadMobileSession, saveMobileSession } from "@/auth/sessionStorage";
-import type { MobileBitkubNextSession, MobileLineAccountSession } from "@/types/mobile-api";
+import type { MobileAccountSession, MobileBitkubNextSession } from "@/types/mobile-api";
 
 export const BITKUB_NEXT_RETURN_TO = "jaothui://oauth/callback";
 const SESSION_ENDPOINT = "/api/mobile/v1/auth/bitkub-next/session";
@@ -98,7 +98,7 @@ export async function redeemBitkubNextWalletLinkHandoff(
   handoff: string,
   sessionToken: string
 ) {
-  return mobilePostWithAuth<MobileLineAccountSession>(
+  return mobilePostWithAuth<MobileAccountSession>(
     LINK_SESSION_ENDPOINT,
     { handoff },
     sessionToken
@@ -135,11 +135,15 @@ export async function openBitkubNextAuthSession() {
 
 export async function openBitkubNextWalletLinkSession() {
   const currentSession = await loadMobileSession();
-  if (!currentSession || currentSession.identity.provider !== "line") {
+  if (
+    !currentSession ||
+    currentSession.identity.sessionVersion !== 2 ||
+    (currentSession.identity.provider !== "line" && currentSession.identity.provider !== "apple")
+  ) {
     return {
       ok: false as const,
-      reason: "missing_line_session",
-      message: "LINE account session is required before linking Bitkub NEXT",
+      reason: "missing_account_session",
+      message: "JAOTHUI account session is required before linking Bitkub NEXT",
     };
   }
 

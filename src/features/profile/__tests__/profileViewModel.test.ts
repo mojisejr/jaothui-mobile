@@ -83,6 +83,7 @@ describe("profile view model", () => {
       identity: {
         sessionVersion: 2,
         accountId: "account_1",
+        providerUserId: "line-user-1",
         lineUserId: "line-user-1",
         email: "line@example.com",
         displayName: "LINE Holder",
@@ -98,6 +99,29 @@ describe("profile view model", () => {
     expect(getLinkedWallet(profile)).toBeNull();
     expect(hasLinkedWallet(profile)).toBe(false);
     expect(getWalletLabel(profile)).toBe("ยังไม่ได้ผูก");
+  });
+
+  it("treats Apple-only as a valid JAOTHUI account without wallet", () => {
+    const profile: MobileProfile = {
+      ...baseProfile,
+      identity: {
+        sessionVersion: 2,
+        accountId: "account_apple",
+        providerUserId: "apple-sub-1",
+        appleUserId: "apple-sub-1",
+        email: "apple@example.com",
+        displayName: "Apple Holder",
+        avatarUrl: null,
+        provider: "apple",
+        linkedWallet: null,
+      },
+    };
+
+    expect(getProfileDisplayName(profile)).toBe("Apple Holder");
+    expect(getProfileStatusLabel(profile)).toBe("บัญชี Apple");
+    expect(getProfileContactLabel(profile)).toBe("apple@example.com");
+    expect(getLinkedWallet(profile)).toBeNull();
+    expect(hasLinkedWallet(profile)).toBe(false);
   });
 
   it("bounds owned buffalo preview for profile scrolling", () => {

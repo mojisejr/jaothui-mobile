@@ -115,9 +115,10 @@ This is the native mobile design contract for `jaothui-mobile`. The web v2 contr
 language becomes an Expo / React Native product experience without copying Tailwind, browser layout,
 or web-only auth behavior.
 
-Round 1 started as the public journey only. The current profile contract is LINE-first account
-login with optional Bitkub NEXT wallet linking. Store, game, privilege, order, and farm-management
-flows are still deferred.
+Round 1 started as the public journey only. The current profile contract is JAOTHUI account
+login with iOS Sign in with Apple plus LINE, and optional Bitkub NEXT wallet linking after
+account login. Android keeps the LINE-first behavior unless a platform-safe fallback is available.
+Store, game, privilege, order, and farm-management flows are still deferred.
 
 ## 1. Visual Theme & Atmosphere
 
@@ -213,9 +214,11 @@ mobile controls, not web buttons pasted into RN.
   action button but must not create nested cards.
 - `Skeleton`: subtle pulse using `colors.skeletonBase` and `colors.skeletonHighlight`; no bright
   shimmer bars.
-- `SettingsRow` / `ProfileShell`: account utility surface. LINE is the primary login/account
-  identity; Bitkub NEXT is an optional linked wallet panel after LINE login. LINE-only is a valid
-  connected state and must not be treated as disconnected.
+- `SettingsRow` / `ProfileShell`: account utility surface. iOS offers native Sign in with Apple
+  and LINE as JAOTHUI account identities; Bitkub NEXT is an optional linked wallet panel after
+  account login. A connected LINE account on iOS can explicitly connect Apple so both identities
+  share one JAOTHUI account and wallet; this must never be an email-based merge. LINE-only and
+  Apple-only are valid connected states and must not be treated as disconnected.
 
 ## 5. Layout Principles
 
@@ -236,8 +239,8 @@ Screen rules:
   `ScrollView`.
 - Cert detail may use `ScrollView`, but image and certificate sections should have fixed aspect
   ratios to avoid jumpy layout.
-- Profile shell is reachable from bottom nav and supports disconnected, LINE-only, LINE-linked,
-  legacy Bitkub, loading, and error states.
+- Profile shell is reachable from bottom nav and supports disconnected, Apple-only, LINE-only,
+  account-linked-wallet, legacy Bitkub, loading, and error states.
 - Avoid card-in-card nesting. If a grouped section needs structure, use rows/dividers inside one
   surface or an unframed layout.
 

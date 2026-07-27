@@ -12,6 +12,9 @@ export function getProfileDisplayName(profile: MobileProfile) {
   if (profile.identity.provider === "line" && profile.identity.displayName?.trim()) {
     return profile.identity.displayName.trim();
   }
+  if (profile.identity.provider === "apple" && profile.identity.displayName?.trim()) {
+    return profile.identity.displayName.trim();
+  }
   return "JAOTHUI Account";
 }
 
@@ -19,6 +22,9 @@ export function getProfileStatusLabel(profile: MobileProfile) {
   if (profile.member) return profile.member.statusLabel;
   if (profile.identity.provider === "line" && !profile.identity.linkedWallet) {
     return "บัญชี LINE";
+  }
+  if (profile.identity.provider === "apple" && !profile.identity.linkedWallet) {
+    return "บัญชี Apple";
   }
   return profile.counts.ownedBuffalos > 0 ? "ผู้ถือใบพันธุ์ประวัติ" : "เชื่อมต่อแล้ว";
 }

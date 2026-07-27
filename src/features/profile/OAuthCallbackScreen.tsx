@@ -42,8 +42,12 @@ export function OAuthCallbackScreen() {
 
       if (provider === "bitkub-next" && purpose === "link") {
         const session = await loadMobileSession();
-        if (!session || session.identity.provider !== "line") {
-          throw new Error("Missing LINE account session for wallet link");
+        if (
+          !session ||
+          session.identity.sessionVersion !== 2 ||
+          (session.identity.provider !== "line" && session.identity.provider !== "apple")
+        ) {
+          throw new Error("Missing JAOTHUI account session for wallet link");
         }
         await completeBitkubNextWalletLinkHandoff(verifiedHandoff, session.sessionToken);
         return;
