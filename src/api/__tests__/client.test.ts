@@ -4,6 +4,7 @@ import {
   mobileGet,
   mobileGetWithAuth,
   mobilePost,
+  resolveApiBaseUrl,
 } from "@/api/client";
 
 function mockJsonResponse(payload: unknown, status = 200) {
@@ -25,6 +26,18 @@ function mockUnreadableResponse(status = 304) {
 describe("mobile API client", () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("gives the disposable local E2E endpoint precedence over the configured API", () => {
+    expect(resolveApiBaseUrl("http://192.168.1.176:3100/", "https://www.jaothui.com")).toBe(
+      "http://192.168.1.176:3100"
+    );
+  });
+
+  it("keeps the configured API when no local E2E endpoint is supplied", () => {
+    expect(resolveApiBaseUrl(undefined, "https://www.jaothui.com/")).toBe(
+      "https://www.jaothui.com"
+    );
   });
 
   it("keeps public GET requests unauthenticated", async () => {

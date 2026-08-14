@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
+import { API_BASE_URL } from "@/api/client";
 import { isAppleAccountAuthAvailable, openAppleAccountAuthSession } from "@/auth/appleAccount";
 import { openBitkubNextWalletLinkSession } from "@/auth/bitkubNext";
 import { openLineAccountAuthSession } from "@/auth/lineAccount";
@@ -346,6 +347,15 @@ function DisconnectedProfile({
         message={message || "เข้าสู่ระบบเพื่อใช้งานโปรไฟล์ JAOTHUI บนมือถือ"}
       />
 
+      {__DEV__ ? (
+        <View style={styles.localE2eIndicator} testID="local-e2e-api-indicator">
+          <Text style={styles.localE2eIndicatorLabel}>Development API</Text>
+          <Text selectable style={styles.localE2eIndicatorValue}>
+            {API_BASE_URL}
+          </Text>
+        </View>
+      ) : null}
+
       {appleDeletionGuidance ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>จัดการการลงชื่อเข้าใช้ด้วย Apple</Text>
@@ -677,6 +687,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
+  },
+  localE2eIndicator: {
+    borderColor: "#66531c",
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 12,
+  },
+  localE2eIndicatorLabel: {
+    color: "#d8b65c",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  localE2eIndicatorValue: {
+    color: "#ffffff",
+    fontSize: 12,
   },
   card: {
     overflow: "hidden",
