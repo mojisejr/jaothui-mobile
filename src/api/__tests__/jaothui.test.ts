@@ -1,8 +1,9 @@
-import { buildBuffaloQueryString, getMe, getNewsEvents, getProfile } from "@/api/jaothui";
-import { mobileGet, mobileGetWithAuth } from "@/api/client";
+import { buildBuffaloQueryString, deleteAccount, getMe, getNewsEvents, getProfile } from "@/api/jaothui";
+import { mobileDeleteWithAuth, mobileGet, mobileGetWithAuth } from "@/api/client";
 
 jest.mock("@/api/client", () => ({
   mobileGet: jest.fn(),
+  mobileDeleteWithAuth: jest.fn(),
   mobileGetWithAuth: jest.fn(),
 }));
 
@@ -56,5 +57,17 @@ describe("profile API", () => {
 
     expect(mobileGetWithAuth).toHaveBeenNthCalledWith(1, "/api/mobile/v2/me", "session-token");
     expect(mobileGetWithAuth).toHaveBeenNthCalledWith(2, "/api/mobile/v2/profile", "session-token");
+  });
+
+  it("uses the authenticated v2 deletion endpoint", async () => {
+    (mobileDeleteWithAuth as jest.Mock).mockResolvedValueOnce({
+      deletedAt: "2026-08-13T00:00:00.000Z",
+      deletionPolicyVersion: "2026-08-13",
+      manualAppleRevocationRequired: false,
+    });
+
+    await deleteAccount("session-token");
+
+    expect(mobileDeleteWithAuth).toHaveBeenCalledWith("/api/mobile/v2/account", "session-token");
   });
 });

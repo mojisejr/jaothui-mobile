@@ -1,9 +1,10 @@
-import { mobileGet, mobileGetWithAuth } from "./client";
+import { mobileDeleteWithAuth, mobileGet, mobileGetWithAuth } from "./client";
 import type {
   MobileBuffaloList,
   MobileBuffaloQuery,
   MobileCertDetail,
   MobileCertificateImage,
+  MobileAccountDeletionReceipt,
   MobileHome,
   MobileMe,
   MobileNewsEvents,
@@ -54,4 +55,8 @@ export function getMe(sessionToken: string) {
 
 export function getProfile(sessionToken: string) {
   return mobileGetWithAuth<MobileProfile>("/api/mobile/v2/profile", sessionToken);
+}
+
+export function deleteAccount(sessionToken: string) {
+  return mobileDeleteWithAuth<MobileAccountDeletionReceipt>("/api/mobile/v2/account", sessionToken);
 }

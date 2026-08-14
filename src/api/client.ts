@@ -6,7 +6,7 @@ export const API_BASE_URL =
   process.env.EXPO_PUBLIC_JAOTHUI_API_BASE_URL?.replace(/\/$/, "") || DEFAULT_API_BASE_URL;
 
 type MobileRequestOptions = {
-  method?: "GET" | "POST";
+  method?: "DELETE" | "GET" | "POST";
   body?: unknown;
   bearerToken?: string | null;
 };
@@ -87,4 +87,8 @@ export function mobilePostWithAuth<T>(
 
 export function mobileGetWithAuth<T>(path: string, bearerToken?: string | null): Promise<T> {
   return mobileRequest<T>(path, { bearerToken });
+}
+
+export function mobileDeleteWithAuth<T>(path: string, bearerToken?: string | null): Promise<T> {
+  return mobileRequest<T>(path, { method: "DELETE", bearerToken });
 }
