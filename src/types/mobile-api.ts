@@ -185,6 +185,12 @@ export type MobileAccountSession = {
   identity: MobileAccountSessionIdentity;
 };
 
+export type MobileAccountDeletionReceipt = {
+  deletedAt: string;
+  deletionPolicyVersion: string;
+  manualAppleRevocationRequired: boolean;
+};
+
 export type MobileLineAccountSession = MobileAccountSession & {
   identity: MobileLineAccountIdentity;
 };

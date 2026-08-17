@@ -67,6 +67,16 @@ bun run build:internal:ios
 
 iOS internal installation requires Apple Developer credentials and registered device UDIDs for ad hoc builds. Android internal builds produce an APK install link from EAS and do not require a Google Play account.
 
+## Local E2E development build
+
+The local account-deletion E2E lane uses a separate iOS development-client build:
+
+```bash
+bun run build:development:ios
+```
+
+This profile keeps the production and internal API URLs unchanged. It enables only iOS local-network ATS support (`NSAllowsLocalNetworking`) for the disposable local API; it never enables `NSAllowsArbitraryLoads`. Set `EXPO_PUBLIC_JAOTHUI_LOCAL_E2E_API_BASE_URL` only in the local Metro process to the current reachable local API host. This dedicated override takes precedence only for that disposable Metro session and is absent from internal and production builds.
+
 Publish a JS/assets-only internal update:
 
 ```bash

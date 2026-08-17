@@ -2,11 +2,28 @@ import type { MobileResponse } from "@/types/mobile-api";
 
 const DEFAULT_API_BASE_URL = "http://localhost:3020";
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_JAOTHUI_API_BASE_URL?.replace(/\/$/, "") || DEFAULT_API_BASE_URL;
+export function resolveApiBaseUrl(
+  localE2eApiBaseUrl?: string,
+  configuredApiBaseUrl?: string
+) {
+  return (
+    localE2eApiBaseUrl?.replace(/\/$/, "") ||
+    configuredApiBaseUrl?.replace(/\/$/, "") ||
+    DEFAULT_API_BASE_URL
+  );
+}
+
+// Keep this separate from the normal public API setting. Expo's development
+// environment can load .env after shell variables, so the dedicated key gives
+// disposable local E2E Metro sessions deterministic precedence without
+// changing internal or production builds.
+export const API_BASE_URL = resolveApiBaseUrl(
+  process.env.EXPO_PUBLIC_JAOTHUI_LOCAL_E2E_API_BASE_URL,
+  process.env.EXPO_PUBLIC_JAOTHUI_API_BASE_URL
+);
 
 type MobileRequestOptions = {
-  method?: "GET" | "POST";
+  method?: "DELETE" | "GET" | "POST";
   body?: unknown;
   bearerToken?: string | null;
 };
@@ -87,4 +104,8 @@ export function mobilePostWithAuth<T>(
 
 export function mobileGetWithAuth<T>(path: string, bearerToken?: string | null): Promise<T> {
   return mobileRequest<T>(path, { bearerToken });
+}
+
+export function mobileDeleteWithAuth<T>(path: string, bearerToken?: string | null): Promise<T> {
+  return mobileRequest<T>(path, { method: "DELETE", bearerToken });
 }

@@ -1,8 +1,9 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
+import { API_BASE_URL } from "@/api/client";
 import { isAppleAccountAuthAvailable, openAppleAccountAuthSession } from "@/auth/appleAccount";
 import { openBitkubNextWalletLinkSession } from "@/auth/bitkubNext";
 import { openLineAccountAuthSession } from "@/auth/lineAccount";
@@ -25,10 +26,11 @@ import {
   getWalletLabel,
   hasLinkedWallet,
 } from "./profileViewModel";
+import { deleteAccountThenClearSession } from "./accountDeletion";
 
 type ProfileState =
   | { status: "checking" }
-  | { status: "disconnected"; message?: string }
+  | { status: "disconnected"; message?: string; appleDeletionGuidance?: boolean }
   | { status: "connectingApple" }
   | { status: "connectingLine" }
   | { status: "loading"; session: MobileSession }
@@ -42,6 +44,7 @@ export function ProfileShell() {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>({ status: "checking" });
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadProfileFromSession = useCallback(async (session: MobileSession) => {
     setState({ status: "loading", session });
@@ -177,12 +180,78 @@ export function ProfileShell() {
     setState({ status: "disconnected" });
   }, []);
 
+  const deleteAccount = useCallback(async (session: MobileSession, profile: MobileProfile) => {
+    if (
+      deleting ||
+      (profile.identity.provider !== "line" && profile.identity.provider !== "apple")
+    ) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const { receipt } = await deleteAccountThenClearSession(session.sessionToken);
+      setState({
+        status: "disconnected",
+        message: "ลบบัญชี JAOTHUI สำเร็จแล้ว",
+        appleDeletionGuidance: receipt.manualAppleRevocationRequired,
+      });
+    } catch (error) {
+      setState({
+        status: "connected",
+        session,
+        profile,
+      });
+      Alert.alert(
+        "ยังลบบัญชีไม่สำเร็จ",
+        error instanceof Error ? error.message : "โปรดลองอีกครั้ง โดยบัญชีของคุณยังเชื่อมต่ออยู่"
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleting]);
+
+  const requestAccountDeletion = useCallback(
+    (session: MobileSession, profile: MobileProfile) => {
+      if (deleting) return;
+
+      Alert.alert(
+        "ลบบัญชี JAOTHUI",
+        "การลบบัญชีเป็นการถาวร ข้อมูลเข้าสู่ระบบและการเชื่อมต่อ Bitkub NEXT ของบัญชีนี้จะถูกลบ",
+        [
+          { text: "ยกเลิก", style: "cancel" },
+          {
+            text: "ดำเนินการต่อ",
+            style: "destructive",
+            onPress: () =>
+              Alert.alert(
+                "ยืนยันการลบบัญชี",
+                "เมื่อลบแล้ว คุณจะไม่สามารถกู้คืนบัญชีหรือการเชื่อมต่อ wallet เดิมได้",
+                [
+                  { text: "ยกเลิก", style: "cancel" },
+                  {
+                    text: "ลบบัญชีถาวร",
+                    style: "destructive",
+                    onPress: () => {
+                      void deleteAccount(session, profile);
+                    },
+                  },
+                ]
+              ),
+          },
+        ]
+      );
+    },
+    [deleteAccount, deleting]
+  );
+
   return (
     <AppShell activeTab="profile">
       {state.status === "checking" ? <ProfileSkeleton /> : null}
       {state.status === "disconnected" ? (
         <DisconnectedProfile
           appleAvailable={appleAvailable}
+          appleDeletionGuidance={state.appleDeletionGuidance}
           message={state.message}
           onConnectApple={connectApple}
           onConnectLine={connectLine}
@@ -213,6 +282,8 @@ export function ProfileShell() {
           onLogout={logout}
           onLinkWallet={() => linkWallet(state.session, state.profile)}
           onAttachApple={() => attachAppleToCurrentAccount(state.session, state.profile)}
+          onDeleteAccount={() => requestAccountDeletion(state.session, state.profile)}
+          deleting={deleting}
           onOpenBuffalo={(microchip) =>
             router.push({
               pathname: "/certs/[microchip]",
@@ -247,11 +318,13 @@ function ProfileSkeleton() {
 
 function DisconnectedProfile({
   appleAvailable,
+  appleDeletionGuidance,
   message,
   onConnectApple,
   onConnectLine,
 }: {
   appleAvailable: boolean;
+  appleDeletionGuidance?: boolean;
   message?: string;
   onConnectApple: () => void;
   onConnectLine: () => void;
@@ -273,6 +346,32 @@ function DisconnectedProfile({
         title="ยังไม่ได้เข้าสู่ระบบ"
         message={message || "เข้าสู่ระบบเพื่อใช้งานโปรไฟล์ JAOTHUI บนมือถือ"}
       />
+
+      {__DEV__ ? (
+        <View style={styles.localE2eIndicator} testID="local-e2e-api-indicator">
+          <Text style={styles.localE2eIndicatorLabel}>Development API</Text>
+          <Text selectable style={styles.localE2eIndicatorValue}>
+            {API_BASE_URL}
+          </Text>
+        </View>
+      ) : null}
+
+      {appleDeletionGuidance ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>จัดการการลงชื่อเข้าใช้ด้วย Apple</Text>
+          <Text style={styles.panelMessage}>
+            JAOTHUI ลบบัญชีของคุณแล้ว หากต้องการจัดการการอนุญาต Sign in with Apple เพิ่มเติม ให้ไปที่ การตั้งค่า &gt; ชื่อของคุณ &gt; Sign in with Apple
+          </Text>
+          <Pressable
+            accessibilityHint="เปิดหน้าช่วยเหลือ Apple เกี่ยวกับการจัดการ Sign in with Apple"
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL("https://support.apple.com/102571")}
+            style={styles.appleHelpButton}
+          >
+            <Text style={styles.appleHelpText}>ดูวิธีจัดการใน Apple</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={styles.authActions}>
         {appleAvailable ? (
@@ -304,14 +403,18 @@ function DisconnectedProfile({
 
 function ConnectedProfile({
   appleAvailable,
+  deleting,
   onAttachApple,
+  onDeleteAccount,
   onLogout,
   onLinkWallet,
   onOpenBuffalo,
   profile,
 }: {
   appleAvailable: boolean;
+  deleting: boolean;
   onAttachApple: () => void;
+  onDeleteAccount: () => void;
   onLogout: () => void;
   onLinkWallet: () => void;
   onOpenBuffalo: (microchip: string) => void;
@@ -376,6 +479,25 @@ function ConnectedProfile({
         />
         <SettingsRow disabled={false} label="ข้อมูลฟาร์ม" right={profile.member?.farmName || "ยังไม่มีฟาร์ม"} />
       </View>
+
+      {isJaothuiAccount ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>บัญชีและความเป็นส่วนตัว</Text>
+          <Text style={styles.panelMessage}>
+            การลบบัญชีเป็นการถาวร และจะลบข้อมูลเข้าสู่ระบบกับการเชื่อมต่อ Bitkub NEXT ของบัญชีนี้
+          </Text>
+          <SettingsRow
+            accessibilityHint="เปิดขั้นตอนยืนยันการลบบัญชีแบบถาวร"
+            disabledCaption={null}
+            disabled={deleting}
+            label="ลบบัญชี JAOTHUI"
+            onPress={onDeleteAccount}
+            right={deleting ? "กำลังลบ..." : "ลบบัญชี"}
+            testID="account-deletion-row"
+            variant="danger"
+          />
+        </View>
+      ) : null}
 
       {profile.identity.provider === "line" && appleAvailable ? (
         <View style={styles.card}>
@@ -566,6 +688,23 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: "center",
   },
+  localE2eIndicator: {
+    borderColor: "#66531c",
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 12,
+  },
+  localE2eIndicatorLabel: {
+    color: "#d8b65c",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  localE2eIndicatorValue: {
+    color: "#ffffff",
+    fontSize: 12,
+  },
   card: {
     overflow: "hidden",
     borderWidth: 1,
@@ -632,6 +771,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     minHeight: spacing.touchTarget,
     paddingHorizontal: spacing.lg,
+  },
+  appleHelpButton: {
+    alignItems: "center",
+    borderColor: colors.borderStrong,
+    borderRadius: spacing.pillRadius,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.lg,
+  },
+  appleHelpText: {
+    color: colors.gold,
+    fontSize: 14,
+    fontWeight: "900",
   },
   linkText: {
     color: colors.background,

@@ -1,4 +1,11 @@
-import { API_BASE_URL, mobileGet, mobileGetWithAuth, mobilePost } from "@/api/client";
+import {
+  API_BASE_URL,
+  mobileDeleteWithAuth,
+  mobileGet,
+  mobileGetWithAuth,
+  mobilePost,
+  resolveApiBaseUrl,
+} from "@/api/client";
 
 function mockJsonResponse(payload: unknown, status = 200) {
   return {
@@ -19,6 +26,18 @@ function mockUnreadableResponse(status = 304) {
 describe("mobile API client", () => {
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("gives the disposable local E2E endpoint precedence over the configured API", () => {
+    expect(resolveApiBaseUrl("http://192.168.1.176:3100/", "https://www.jaothui.com")).toBe(
+      "http://192.168.1.176:3100"
+    );
+  });
+
+  it("keeps the configured API when no local E2E endpoint is supplied", () => {
+    expect(resolveApiBaseUrl(undefined, "https://www.jaothui.com/")).toBe(
+      "https://www.jaothui.com"
+    );
   });
 
   it("keeps public GET requests unauthenticated", async () => {
@@ -91,6 +110,25 @@ describe("mobile API client", () => {
         body: JSON.stringify({ handoff: "handoff-token" }),
       }
     );
+  });
+
+  it("deletes an authenticated account without a request body", async () => {
+    const fetchMock = jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue(mockJsonResponse({ ok: true, data: { deletedAt: "now" } }));
+
+    await mobileDeleteWithAuth("/api/mobile/v2/account", "session-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/mobile/v2/account`, {
+      method: "DELETE",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        Authorization: "Bearer session-token",
+        "Cache-Control": "no-cache",
+      },
+      body: undefined,
+    });
   });
 
   it("throws a readable API error for empty cached responses", async () => {

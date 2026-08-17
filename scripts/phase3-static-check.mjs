@@ -42,6 +42,30 @@ for (const file of [
   }
 }
 
+const profileShell = readFileSync(path.join(root, "src/features/profile/ProfileShell.tsx"), "utf8");
+const settingsRow = readFileSync(path.join(root, "src/components/SettingsRow.tsx"), "utf8");
+const accountDeletion = readFileSync(path.join(root, "src/features/profile/accountDeletion.ts"), "utf8");
+
+for (const requiredSnippet of [
+  "บัญชีและความเป็นส่วนตัว",
+  "ลบบัญชี JAOTHUI",
+  "Alert.alert",
+  "manualAppleRevocationRequired",
+  "account-deletion-row",
+]) {
+  if (!profileShell.includes(requiredSnippet)) {
+    failures.push(`missing account deletion UI wiring: ${requiredSnippet}`);
+  }
+}
+
+if (!settingsRow.includes('variant?: "default" | "danger"') || !settingsRow.includes("accessibilityRole")) {
+  failures.push("SettingsRow is missing danger or accessibility support");
+}
+
+if (!accountDeletion.includes("const receipt = await dependencies.deleteAccount(sessionToken)") || !accountDeletion.includes("await dependencies.clearSession()")) {
+  failures.push("account deletion no longer clears the local session only after a server receipt");
+}
+
 const envExample = readFileSync(path.join(root, ".env.example"), "utf8");
 if (!envExample.includes("EXPO_PUBLIC_JAOTHUI_API_BASE_URL=")) {
   failures.push("missing EXPO_PUBLIC_JAOTHUI_API_BASE_URL in .env.example");
