@@ -27,6 +27,7 @@ import {
   hasLinkedWallet,
 } from "./profileViewModel";
 import { deleteAccountThenClearSession } from "./accountDeletion";
+import { recoverRejectedMobileSession } from "./sessionRecovery";
 
 type ProfileState =
   | { status: "checking" }
@@ -52,6 +53,14 @@ export function ProfileShell() {
       const profile = await getProfile(session.sessionToken);
       setState({ status: "connected", session, profile });
     } catch (error) {
+      if (await recoverRejectedMobileSession(error)) {
+        setState({
+          status: "disconnected",
+          message: "เซสชันหมดอายุแล้ว โปรดเข้าสู่ระบบอีกครั้ง",
+        });
+        return;
+      }
+
       setState({
         status: "error",
         message: error instanceof Error ? error.message : "โหลดโปรไฟล์ไม่สำเร็จ",
