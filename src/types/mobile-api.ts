@@ -154,29 +154,47 @@ export type MobileLinkedWalletIdentity = {
   provider: "bitkub-next";
 };
 
-export type MobileAccountProvider = "line" | "apple";
+export type MobileAccountProvider = "line" | "apple" | "reviewer";
 
-export type MobileAccountSessionIdentity = {
+type MobileAccountSessionIdentityBase = {
   sessionVersion: 2;
   accountId: string;
   providerUserId: string;
+  provider: MobileAccountProvider;
+};
+
+export type MobileAccountSessionIdentity = MobileLineAccountIdentity | MobileAppleAccountIdentity | MobileReviewerSessionIdentity;
+
+type MobileAccountProfileIdentityBase = MobileAccountSessionIdentityBase & {
   lineUserId?: string;
   appleUserId?: string;
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
-  provider: MobileAccountProvider;
   linkedWallet: MobileLinkedWalletIdentity | null;
 };
 
-export type MobileLineAccountIdentity = MobileAccountSessionIdentity & {
+export type MobileLineAccountIdentity = MobileAccountProfileIdentityBase & {
   provider: "line";
   lineUserId: string;
 };
 
-export type MobileAppleAccountIdentity = MobileAccountSessionIdentity & {
+export type MobileAppleAccountIdentity = MobileAccountProfileIdentityBase & {
   provider: "apple";
   appleUserId: string;
+};
+
+/** The session endpoint exposes only the fields needed to resume reviewer access. */
+export type MobileReviewerSessionIdentity = MobileAccountSessionIdentityBase & {
+  provider: "reviewer";
+};
+
+/** The authenticated profile endpoint may add display metadata, but never a real wallet. */
+export type MobileReviewerProfileIdentity = MobileReviewerSessionIdentity & {
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  linkedWallet: null;
 };
 
 export type MobileAccountSession = {
@@ -199,9 +217,26 @@ export type MobileAppleAccountSession = MobileAccountSession & {
   identity: MobileAppleAccountIdentity;
 };
 
+export type MobileReviewerAccountSession = MobileAccountSession & {
+  identity: MobileReviewerSessionIdentity;
+};
+
 export type MobileSession = MobileBitkubNextSession | MobileAccountSession;
 
-export type MobileAccountIdentity = MobileBitkubNextIdentity | MobileAccountSessionIdentity;
+export type MobileAccountIdentity =
+  | MobileBitkubNextIdentity
+  | MobileLineAccountIdentity
+  | MobileAppleAccountIdentity
+  | MobileReviewerProfileIdentity;
+
+export type MobileReviewerAvailability = { available: boolean };
+
+export type MobileReviewerWalletFixture = {
+  kind: "reviewer-sandbox";
+  label: "Demo wallet fixture";
+  linked: boolean;
+  walletAddress: null;
+};
 
 export type MobileMe = {
   identity: MobileAccountIdentity;

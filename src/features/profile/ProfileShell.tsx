@@ -1,12 +1,17 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
 import { API_BASE_URL } from "@/api/client";
 import { isAppleAccountAuthAvailable, openAppleAccountAuthSession } from "@/auth/appleAccount";
 import { openBitkubNextWalletLinkSession } from "@/auth/bitkubNext";
 import { openLineAccountAuthSession } from "@/auth/lineAccount";
+import {
+  completeReviewerSandboxSignIn,
+  getReviewerSandboxAvailability,
+  updateReviewerWalletFixture,
+} from "@/auth/reviewerSandbox";
 import { clearMobileSession, loadMobileSession } from "@/auth/sessionStorage";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
@@ -17,6 +22,7 @@ import { colors, shadow, spacing, typography } from "@/design/tokens";
 import type { MobileProfile, MobileSession } from "@/types/mobile-api";
 import {
   formatWalletAddress,
+  canOpenBitkubNextWalletLink,
   getLinkedWallet,
   getOwnedBuffaloPreview,
   getProfileAvatarUrl,
@@ -32,6 +38,7 @@ import { recoverRejectedMobileSession } from "./sessionRecovery";
 type ProfileState =
   | { status: "checking" }
   | { status: "disconnected"; message?: string; appleDeletionGuidance?: boolean }
+  | { status: "reviewerAccess" }
   | { status: "connectingApple" }
   | { status: "connectingLine" }
   | { status: "loading"; session: MobileSession }
@@ -45,6 +52,9 @@ export function ProfileShell() {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>({ status: "checking" });
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [reviewerAvailable, setReviewerAvailable] = useState(false);
+  const [reviewerFixtureLinked, setReviewerFixtureLinked] = useState(false);
+  const [reviewerFixtureBusy, setReviewerFixtureBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const loadProfileFromSession = useCallback(async (session: MobileSession) => {
@@ -97,6 +107,22 @@ export function ProfileShell() {
       })
       .catch(() => {
         if (active) setAppleAvailable(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getReviewerSandboxAvailability()
+      .then(({ available }) => {
+        if (active) setReviewerAvailable(available);
+      })
+      .catch(() => {
+        // Fail closed: store-review access is hidden unless the server gate confirms it.
+        if (active) setReviewerAvailable(false);
       });
 
     return () => {
@@ -159,6 +185,15 @@ export function ProfileShell() {
     }
   }, [loadProfileFromSession]);
 
+  const connectReviewer = useCallback(
+    async (username: string, password: string) => {
+      const session = await completeReviewerSandboxSignIn({ username, password });
+      setReviewerFixtureLinked(false);
+      await loadProfileFromSession(session);
+    },
+    [loadProfileFromSession]
+  );
+
   const linkWallet = useCallback(
     async (session: MobileSession, profile: MobileProfile) => {
       setState({ status: "linkingWallet", session, profile });
@@ -186,13 +221,36 @@ export function ProfileShell() {
 
   const logout = useCallback(async () => {
     await clearMobileSession();
+    setReviewerFixtureLinked(false);
     setState({ status: "disconnected" });
   }, []);
+
+  const setReviewerFixture = useCallback(
+    async (session: MobileSession, linked: boolean) => {
+      if (session.identity.provider !== "reviewer" || reviewerFixtureBusy) return;
+
+      setReviewerFixtureBusy(true);
+      try {
+        const fixture = await updateReviewerWalletFixture(session.sessionToken, linked);
+        setReviewerFixtureLinked(fixture.linked);
+      } catch (error) {
+        Alert.alert(
+          "อัปเดต wallet fixture ไม่สำเร็จ",
+          error instanceof Error ? error.message : "โปรดลองอีกครั้ง"
+        );
+      } finally {
+        setReviewerFixtureBusy(false);
+      }
+    },
+    [reviewerFixtureBusy]
+  );
 
   const deleteAccount = useCallback(async (session: MobileSession, profile: MobileProfile) => {
     if (
       deleting ||
-      (profile.identity.provider !== "line" && profile.identity.provider !== "apple")
+      (profile.identity.provider !== "line" &&
+        profile.identity.provider !== "apple" &&
+        profile.identity.provider !== "reviewer")
     ) {
       return;
     }
@@ -264,6 +322,14 @@ export function ProfileShell() {
           message={state.message}
           onConnectApple={connectApple}
           onConnectLine={connectLine}
+          reviewerAvailable={reviewerAvailable}
+          onOpenReviewerAccess={() => setState({ status: "reviewerAccess" })}
+        />
+      ) : null}
+      {state.status === "reviewerAccess" ? (
+        <ReviewerAccessProfile
+          onBack={() => setState({ status: "disconnected" })}
+          onSubmit={connectReviewer}
         />
       ) : null}
       {state.status === "connectingApple" ? (
@@ -290,6 +356,9 @@ export function ProfileShell() {
           profile={state.profile}
           onLogout={logout}
           onLinkWallet={() => linkWallet(state.session, state.profile)}
+          onToggleReviewerFixture={(linked) => setReviewerFixture(state.session, linked)}
+          reviewerFixtureBusy={reviewerFixtureBusy}
+          reviewerFixtureLinked={reviewerFixtureLinked}
           onAttachApple={() => attachAppleToCurrentAccount(state.session, state.profile)}
           onDeleteAccount={() => requestAccountDeletion(state.session, state.profile)}
           deleting={deleting}
@@ -331,12 +400,16 @@ function DisconnectedProfile({
   message,
   onConnectApple,
   onConnectLine,
+  onOpenReviewerAccess,
+  reviewerAvailable,
 }: {
   appleAvailable: boolean;
   appleDeletionGuidance?: boolean;
   message?: string;
   onConnectApple: () => void;
   onConnectLine: () => void;
+  onOpenReviewerAccess: () => void;
+  reviewerAvailable: boolean;
 }) {
   return (
     <>
@@ -398,6 +471,27 @@ function DisconnectedProfile({
         <Text style={styles.authHint}>Bitkub NEXT ใช้สำหรับผูก wallet หลังเข้าสู่ระบบ</Text>
       </View>
 
+      {reviewerAvailable ? (
+        <View style={styles.reviewerEntryCard}>
+          <View style={styles.reviewerEntryCopy}>
+            <Text style={styles.reviewerEntryTitle}>Reviewer access</Text>
+            <Text style={styles.reviewerEntryMessage}>
+              สำหรับผู้ตรวจสอบ App Store และ Google Play เท่านั้น
+            </Text>
+          </View>
+          <Pressable
+            accessibilityHint="เปิดหน้าลงชื่อเข้าใช้สำหรับผู้ตรวจสอบแอป"
+            accessibilityLabel="Reviewer access"
+            accessibilityRole="button"
+            onPress={onOpenReviewerAccess}
+            style={styles.reviewerEntryButton}
+            testID="reviewer-access-entry"
+          >
+            <Text style={styles.reviewerEntryButtonText}>เข้าสู่ระบบ</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>บัญชีและฟาร์ม</Text>
         {appleAvailable ? <SettingsRow label="บัญชี Apple" /> : null}
@@ -410,6 +504,93 @@ function DisconnectedProfile({
   );
 }
 
+function ReviewerAccessProfile({
+  onBack,
+  onSubmit,
+}: {
+  onBack: () => void;
+  onSubmit: (username: string, password: string) => Promise<void>;
+}) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const submit = useCallback(async () => {
+    if (!username.trim() || !password) {
+      setErrorMessage("กรอกชื่อผู้ใช้และรหัสผ่านที่ได้รับสำหรับการตรวจสอบ");
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await onSubmit(username, password);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "ไม่สามารถเข้าสู่ระบบ reviewer ได้");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [onSubmit, password, username]);
+
+  return (
+    <View style={styles.reviewerLoginCard}>
+      <Text style={styles.eyebrow}>Reviewer access</Text>
+      <Text style={styles.title}>เข้าสู่ระบบสำหรับผู้ตรวจสอบ</Text>
+      <Text style={styles.reviewerLoginMessage}>
+        ใช้ข้อมูลสำหรับการตรวจสอบที่ให้ไว้ใน App Store Connect หรือ Google Play Console เท่านั้น
+      </Text>
+      <Text style={styles.inputLabel}>Username</Text>
+      <TextInput
+        accessibilityLabel="Reviewer username"
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!submitting}
+        onChangeText={setUsername}
+        placeholder="Username"
+        placeholderTextColor={colors.muted}
+        style={styles.reviewerInput}
+        testID="reviewer-username-input"
+        value={username}
+      />
+      <Text style={styles.inputLabel}>Password</Text>
+      <TextInput
+        accessibilityLabel="Reviewer password"
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!submitting}
+        onChangeText={setPassword}
+        placeholder="Password"
+        placeholderTextColor={colors.muted}
+        secureTextEntry
+        style={styles.reviewerInput}
+        testID="reviewer-password-input"
+        value={password}
+      />
+      {errorMessage ? <Text style={styles.reviewerError}>{errorMessage}</Text> : null}
+      <Pressable
+        accessibilityHint="ส่งข้อมูลไปยัง reviewer sandbox ของ JAOTHUI"
+        accessibilityLabel="Sign in to reviewer sandbox"
+        accessibilityRole="button"
+        disabled={submitting}
+        onPress={() => void submit()}
+        style={[styles.linkButton, submitting && styles.disabledAction]}
+        testID="reviewer-sign-in"
+      >
+        <Text style={styles.linkText}>{submitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ reviewer"}</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onBack}
+        style={styles.reviewerBackButton}
+        testID="reviewer-access-back"
+      >
+        <Text style={styles.reviewerBackText}>กลับไปหน้าโปรไฟล์</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function ConnectedProfile({
   appleAvailable,
   deleting,
@@ -418,7 +599,10 @@ function ConnectedProfile({
   onLogout,
   onLinkWallet,
   onOpenBuffalo,
+  onToggleReviewerFixture,
   profile,
+  reviewerFixtureBusy,
+  reviewerFixtureLinked,
 }: {
   appleAvailable: boolean;
   deleting: boolean;
@@ -427,7 +611,10 @@ function ConnectedProfile({
   onLogout: () => void;
   onLinkWallet: () => void;
   onOpenBuffalo: (microchip: string) => void;
+  onToggleReviewerFixture: (linked: boolean) => void;
   profile: MobileProfile;
+  reviewerFixtureBusy: boolean;
+  reviewerFixtureLinked: boolean;
 }) {
   const ownedBuffalos = getOwnedBuffaloPreview(profile);
   const displayName = getProfileDisplayName(profile);
@@ -437,13 +624,18 @@ function ConnectedProfile({
   const linkedWallet = getLinkedWallet(profile);
   const walletLabel = getWalletLabel(profile);
   const isJaothuiAccount =
-    profile.identity.provider === "line" || profile.identity.provider === "apple";
+    profile.identity.provider === "line" ||
+    profile.identity.provider === "apple" ||
+    profile.identity.provider === "reviewer";
+  const isReviewer = profile.identity.provider === "reviewer";
   const providerLabel =
     profile.identity.provider === "apple"
       ? "Apple Account"
       : profile.identity.provider === "line"
         ? "LINE Account"
-        : "Bitkub NEXT";
+        : profile.identity.provider === "reviewer"
+          ? "Reviewer Sandbox"
+          : "Bitkub NEXT";
   const walletLinked = hasLinkedWallet(profile);
 
   return (
@@ -480,20 +672,60 @@ function ConnectedProfile({
         {profile.identity.provider === "line" ? (
           <SettingsRow disabled={false} label="บัญชี LINE" right="เข้าสู่ระบบแล้ว" />
         ) : null}
-        <SettingsRow disabled={false} label="กระเป๋า Bitkub NEXT" right={walletLabel} />
-        <SettingsRow
-          disabled={false}
-          label="ข้อมูลสมาชิก"
-          right={profile.member ? profile.member.role || "สมาชิก" : "ไม่มี member"}
-        />
-        <SettingsRow disabled={false} label="ข้อมูลฟาร์ม" right={profile.member?.farmName || "ยังไม่มีฟาร์ม"} />
+        {isReviewer ? (
+          <SettingsRow disabled={false} label="Demo wallet fixture" right="ไม่ใช่ wallet จริง" />
+        ) : (
+          <>
+            <SettingsRow disabled={false} label="กระเป๋า Bitkub NEXT" right={walletLabel} />
+            <SettingsRow
+              disabled={false}
+              label="ข้อมูลสมาชิก"
+              right={profile.member ? profile.member.role || "สมาชิก" : "ไม่มี member"}
+            />
+            <SettingsRow disabled={false} label="ข้อมูลฟาร์ม" right={profile.member?.farmName || "ยังไม่มีฟาร์ม"} />
+          </>
+        )}
       </View>
+
+      {isReviewer ? (
+        <View style={styles.reviewerFixtureCard}>
+          <Text style={styles.reviewerFixtureEyebrow}>REVIEWER SANDBOX</Text>
+          <Text style={styles.sectionTitleLarge}>Demo wallet fixture</Text>
+          <Text style={styles.reviewerFixtureMessage}>
+            นี่คือสถานะจำลองสำหรับตรวจสอบหน้าจอเท่านั้น ไม่ใช่ Bitkub NEXT, ไม่มีสินทรัพย์ และไม่เชื่อมต่อข้อมูลลูกค้าจริง
+          </Text>
+          <View style={styles.reviewerFixtureStatus}>
+            <Text style={styles.reviewerFixtureStatusText}>
+              {reviewerFixtureLinked ? "Fixture เชื่อมต่อแล้ว" : "Fixture ยังไม่ได้เชื่อมต่อ"}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityHint="สลับสถานะ Demo wallet fixture โดยไม่เปิด Bitkub NEXT"
+            accessibilityLabel={reviewerFixtureLinked ? "Unlink demo wallet fixture" : "Link demo wallet fixture"}
+            accessibilityRole="button"
+            disabled={reviewerFixtureBusy}
+            onPress={() => onToggleReviewerFixture(!reviewerFixtureLinked)}
+            style={[styles.linkButton, reviewerFixtureBusy && styles.disabledAction]}
+            testID="reviewer-wallet-fixture-toggle"
+          >
+            <Text style={styles.linkText}>
+              {reviewerFixtureBusy
+                ? "กำลังอัปเดต..."
+                : reviewerFixtureLinked
+                  ? "ยกเลิกการเชื่อม Demo wallet"
+                  : "เชื่อม Demo wallet"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {isJaothuiAccount ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>บัญชีและความเป็นส่วนตัว</Text>
           <Text style={styles.panelMessage}>
-            การลบบัญชีเป็นการถาวร และจะลบข้อมูลเข้าสู่ระบบกับการเชื่อมต่อ Bitkub NEXT ของบัญชีนี้
+            {isReviewer
+              ? "การลบบัญชี sandbox เป็นการถาวร บัญชีตรวจสอบนี้จะถูกลบโดยไม่กระทบข้อมูลลูกค้าหรือ wallet จริง"
+              : "การลบบัญชีเป็นการถาวร และจะลบข้อมูลเข้าสู่ระบบกับการเชื่อมต่อ Bitkub NEXT ของบัญชีนี้"}
           </Text>
           <SettingsRow
             accessibilityHint="เปิดขั้นตอนยืนยันการลบบัญชีแบบถาวร"
@@ -520,7 +752,7 @@ function ConnectedProfile({
         </View>
       ) : null}
 
-      {isJaothuiAccount && !walletLinked ? (
+      {isJaothuiAccount && canOpenBitkubNextWalletLink(profile.identity.provider) && !walletLinked ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Bitkub NEXT</Text>
           <Text style={styles.panelMessage}>
@@ -532,7 +764,7 @@ function ConnectedProfile({
         </View>
       ) : null}
 
-      <View style={styles.sectionHeader}>
+      {!isReviewer ? <View style={styles.sectionHeader}>
         <View>
           <Text style={styles.sectionTitleLarge}>ควายของฉัน</Text>
           <Text style={styles.sectionCaption}>
@@ -540,15 +772,15 @@ function ConnectedProfile({
             {linkedWallet ? ` · ${formatWalletAddress(linkedWallet.walletAddress)}` : ""}
           </Text>
         </View>
-      </View>
+      </View> : null}
 
-      {ownedBuffalos.length > 0 ? (
+      {!isReviewer && ownedBuffalos.length > 0 ? (
         <View style={styles.buffaloGrid}>
           {ownedBuffalos.map((buffalo) => (
             <BuffaloCard key={buffalo.microchip} buffalo={buffalo} onPress={() => onOpenBuffalo(buffalo.microchip)} />
           ))}
         </View>
-      ) : (
+      ) : !isReviewer ? (
         <StateBlock
           title="ยังไม่พบควายในบัญชีนี้"
           message={
@@ -557,7 +789,7 @@ function ConnectedProfile({
               : "บัญชี JAOTHUI นี้ยังไม่ได้ผูก Bitkub NEXT จึงยังไม่แสดงข้อมูลควายจาก wallet"
           }
         />
-      )}
+      ) : null}
 
       <Pressable style={styles.logoutButton} onPress={onLogout}>
         <Text style={styles.logoutText}>ออกจากระบบ</Text>
@@ -697,6 +929,131 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: "center",
   },
+  reviewerEntryCard: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.borderStrong,
+    borderRadius: spacing.cardRadius,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  reviewerEntryCopy: { flex: 1 },
+  reviewerEntryTitle: {
+    color: colors.gold,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  reviewerEntryMessage: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  reviewerEntryButton: {
+    alignItems: "center",
+    borderColor: colors.borderStrong,
+    borderRadius: spacing.pillRadius,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.md,
+  },
+  reviewerEntryButtonText: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  reviewerLoginCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.borderStrong,
+    borderRadius: spacing.cardRadius,
+    borderWidth: 1,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    ...shadow.gold,
+  },
+  reviewerLoginMessage: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  inputLabel: {
+    color: colors.foreground,
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: spacing.xs,
+  },
+  reviewerInput: {
+    backgroundColor: colors.background,
+    borderColor: colors.borderSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    color: colors.foreground,
+    fontSize: 16,
+    marginBottom: spacing.md,
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: spacing.md,
+  },
+  reviewerError: {
+    color: colors.danger,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  reviewerBackButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing.sm,
+    minHeight: spacing.touchTarget,
+  },
+  reviewerBackText: {
+    color: colors.gold,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  reviewerFixtureCard: {
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.borderStrong,
+    borderRadius: spacing.cardRadius,
+    borderWidth: 1,
+    marginTop: spacing.xl,
+    padding: spacing.md,
+  },
+  reviewerFixtureEyebrow: {
+    color: colors.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  reviewerFixtureMessage: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
+  reviewerFixtureStatus: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.overlayBadge,
+    borderColor: colors.borderSoft,
+    borderRadius: spacing.pillRadius,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  reviewerFixtureStatusText: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  disabledAction: { opacity: 0.55 },
   localE2eIndicator: {
     borderColor: "#66531c",
     borderRadius: 12,

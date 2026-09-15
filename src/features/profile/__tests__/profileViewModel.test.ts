@@ -1,4 +1,5 @@
 import {
+  canOpenBitkubNextWalletLink,
   formatWalletAddress,
   getOwnedBuffaloPreview,
   getLinkedWallet,
@@ -24,6 +25,13 @@ const baseProfile: MobileProfile = {
 };
 
 describe("profile view model", () => {
+  it("keeps reviewer fixture controls out of the Bitkub NEXT browser flow", () => {
+    expect(canOpenBitkubNextWalletLink("reviewer")).toBe(false);
+    expect(canOpenBitkubNextWalletLink("line")).toBe(true);
+    expect(canOpenBitkubNextWalletLink("apple")).toBe(true);
+    expect(canOpenBitkubNextWalletLink("bitkub-next")).toBe(false);
+  });
+
   it("formats long wallet addresses for compact mobile display", () => {
     expect(formatWalletAddress("0x1234567890abcdef")).toBe("0x1234...cdef");
     expect(formatWalletAddress("0x123")).toBe("0x123");
@@ -122,6 +130,27 @@ describe("profile view model", () => {
     expect(getProfileContactLabel(profile)).toBe("apple@example.com");
     expect(getLinkedWallet(profile)).toBeNull();
     expect(hasLinkedWallet(profile)).toBe(false);
+  });
+
+  it("labels reviewer data as an isolated non-customer profile", () => {
+    const profile: MobileProfile = {
+      ...baseProfile,
+      identity: {
+        sessionVersion: 2,
+        accountId: "reviewer-account",
+        providerUserId: "reviewer-user",
+        provider: "reviewer",
+        email: null,
+        displayName: "JAOTHUI Reviewer Sandbox",
+        avatarUrl: null,
+        linkedWallet: null,
+      },
+    };
+
+    expect(getProfileDisplayName(profile)).toBe("JAOTHUI Reviewer Sandbox");
+    expect(getProfileStatusLabel(profile)).toBe("บัญชีผู้ตรวจสอบ");
+    expect(getProfileContactLabel(profile)).toBe("สำหรับการตรวจสอบแอปเท่านั้น");
+    expect(getLinkedWallet(profile)).toBeNull();
   });
 
   it("bounds owned buffalo preview for profile scrolling", () => {
