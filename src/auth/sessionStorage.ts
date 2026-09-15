@@ -49,7 +49,7 @@ function isMobileAccountSession(value: unknown): value is MobileAccountSession {
     typeof candidate.expiresAt !== "number" ||
     !identity ||
     identity.sessionVersion !== 2 ||
-    (identity.provider !== "line" && identity.provider !== "apple") ||
+    (identity.provider !== "line" && identity.provider !== "apple" && identity.provider !== "reviewer") ||
     typeof identity.accountId !== "string" ||
     !identity.accountId.trim() ||
     typeof identity.providerUserId !== "string" ||
@@ -70,6 +70,21 @@ function isMobileAccountSession(value: unknown): value is MobileAccountSession {
     (typeof identity.appleUserId !== "string" || !identity.appleUserId.trim())
   ) {
     return false;
+  }
+
+  // The reviewer session response is intentionally minimal. It must never carry
+  // a customer identity or a persisted Bitkub wallet snapshot in SecureStore.
+  if (identity.provider === "reviewer") {
+    const reviewerIdentity = identity as typeof identity & {
+      lineUserId?: unknown;
+      appleUserId?: unknown;
+      linkedWallet?: unknown;
+    };
+    return (
+      reviewerIdentity.lineUserId === undefined &&
+      reviewerIdentity.appleUserId === undefined &&
+      reviewerIdentity.linkedWallet === undefined
+    );
   }
 
   if (identity.linkedWallet === null) return true;

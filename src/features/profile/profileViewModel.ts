@@ -1,4 +1,9 @@
-import type { MobileLinkedWalletIdentity, MobileProfile } from "@/types/mobile-api";
+import type { MobileAccountProvider, MobileLinkedWalletIdentity, MobileProfile } from "@/types/mobile-api";
+
+/** Reviewer fixture controls must never fall through to the Bitkub NEXT browser flow. */
+export function canOpenBitkubNextWalletLink(provider: MobileAccountProvider | "bitkub-next") {
+  return provider === "line" || provider === "apple";
+}
 
 export function formatWalletAddress(walletAddress: string) {
   const normalized = walletAddress.trim();
@@ -15,6 +20,9 @@ export function getProfileDisplayName(profile: MobileProfile) {
   if (profile.identity.provider === "apple" && profile.identity.displayName?.trim()) {
     return profile.identity.displayName.trim();
   }
+  if (profile.identity.provider === "reviewer") {
+    return profile.identity.displayName?.trim() || "JAOTHUI Reviewer Sandbox";
+  }
   return "JAOTHUI Account";
 }
 
@@ -26,11 +34,17 @@ export function getProfileStatusLabel(profile: MobileProfile) {
   if (profile.identity.provider === "apple" && !profile.identity.linkedWallet) {
     return "บัญชี Apple";
   }
+  if (profile.identity.provider === "reviewer") {
+    return "บัญชีผู้ตรวจสอบ";
+  }
   return profile.counts.ownedBuffalos > 0 ? "ผู้ถือใบพันธุ์ประวัติ" : "เชื่อมต่อแล้ว";
 }
 
 export function getProfileContactLabel(profile: MobileProfile) {
   const linkedWallet = getLinkedWallet(profile);
+  if (profile.identity.provider === "reviewer") {
+    return "สำหรับการตรวจสอบแอปเท่านั้น";
+  }
   return (
     profile.member?.email ||
     profile.identity.email ||

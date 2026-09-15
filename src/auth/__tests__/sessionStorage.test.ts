@@ -8,6 +8,7 @@ import type {
   MobileAppleAccountSession,
   MobileBitkubNextSession,
   MobileLineAccountSession,
+  MobileReviewerAccountSession,
 } from "@/types/mobile-api";
 
 function createStorage(initial: Record<string, string> = {}, available = true) {
@@ -67,6 +68,17 @@ const appleSession: MobileAppleAccountSession = {
   },
 };
 
+const reviewerSession: MobileReviewerAccountSession = {
+  sessionToken: "reviewer-session-token",
+  expiresAt: 4_000_000_000,
+  identity: {
+    sessionVersion: 2,
+    accountId: "reviewer-account",
+    providerUserId: "reviewer-user",
+    provider: "reviewer",
+  },
+};
+
 describe("mobile session storage", () => {
   it("saves and loads a valid session", async () => {
     const storage = createStorage();
@@ -91,6 +103,14 @@ describe("mobile session storage", () => {
     await saveMobileSession(appleSession, storage);
 
     await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(appleSession);
+  });
+
+  it("saves and loads the minimal reviewer session without a customer wallet", async () => {
+    const storage = createStorage();
+
+    await saveMobileSession(reviewerSession, storage);
+
+    await expect(loadMobileSession(storage, 3_000_000_000_000)).resolves.toEqual(reviewerSession);
   });
 
   it("compares API seconds-based expiry against device milliseconds", async () => {
@@ -130,6 +150,30 @@ describe("mobile session storage", () => {
     });
     await expect(loadMobileSession(invalidLineStorage, 3_000_000)).resolves.toBeNull();
     expect(invalidLineStorage.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
+
+    const malformedReviewerStorage = createStorage({
+      "jaothui.mobileSession.v1": JSON.stringify({
+        ...reviewerSession,
+        identity: {
+          ...reviewerSession.identity,
+          linkedWallet: { provider: "bitkub-next", walletAddress: "0xcustomer" },
+        },
+      }),
+    });
+    await expect(loadMobileSession(malformedReviewerStorage, 3_000_000)).resolves.toBeNull();
+    expect(malformedReviewerStorage.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
+
+    const reviewerWithAppleIdentity = createStorage({
+      "jaothui.mobileSession.v1": JSON.stringify({
+        ...reviewerSession,
+        identity: {
+          ...reviewerSession.identity,
+          appleUserId: "not-a-reviewer-session",
+        },
+      }),
+    });
+    await expect(loadMobileSession(reviewerWithAppleIdentity, 3_000_000)).resolves.toBeNull();
+    expect(reviewerWithAppleIdentity.deleteItemAsync).toHaveBeenCalledWith("jaothui.mobileSession.v1");
   });
 
   it("clears the stored session explicitly", async () => {
