@@ -1,6 +1,6 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
 import { API_BASE_URL } from "@/api/client";
@@ -33,6 +33,11 @@ import {
   hasLinkedWallet,
 } from "./profileViewModel";
 import { deleteAccountThenClearSession } from "./accountDeletion";
+import {
+  checkReviewerAvailabilityAfterActivation,
+  recordReviewerLogoTap,
+} from "./reviewerAccessActivation";
+import { reviewerAccessCopy } from "./reviewerAccessCopy";
 import { recoverRejectedMobileSession } from "./sessionRecovery";
 
 type ProfileState =
@@ -52,10 +57,11 @@ export function ProfileShell() {
   const router = useRouter();
   const [state, setState] = useState<ProfileState>({ status: "checking" });
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const [reviewerAvailable, setReviewerAvailable] = useState(false);
   const [reviewerFixtureLinked, setReviewerFixtureLinked] = useState(false);
   const [reviewerFixtureBusy, setReviewerFixtureBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const reviewerTapWindow = useRef<Parameters<typeof recordReviewerLogoTap>[0]>(null);
+  const reviewerAvailabilityRequestInFlight = useRef(false);
 
   const loadProfileFromSession = useCallback(async (session: MobileSession) => {
     setState({ status: "loading", session });
@@ -114,20 +120,21 @@ export function ProfileShell() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    getReviewerSandboxAvailability()
-      .then(({ available }) => {
-        if (active) setReviewerAvailable(available);
-      })
-      .catch(() => {
-        // Fail closed: store-review access is hidden unless the server gate confirms it.
-        if (active) setReviewerAvailable(false);
-      });
+  const activateReviewerAccess = useCallback(() => {
+    if (reviewerAvailabilityRequestInFlight.current) return;
 
-    return () => {
-      active = false;
-    };
+    const activation = recordReviewerLogoTap(reviewerTapWindow.current, Date.now());
+    reviewerTapWindow.current = activation.nextWindow;
+    if (!activation.shouldCheckAvailability) return;
+
+    reviewerAvailabilityRequestInFlight.current = true;
+    void checkReviewerAvailabilityAfterActivation(activation, getReviewerSandboxAvailability)
+      .then((available) => {
+        if (available) setState({ status: "reviewerAccess" });
+      })
+      .finally(() => {
+        reviewerAvailabilityRequestInFlight.current = false;
+      });
   }, []);
 
   const connectApple = useCallback(async () => {
@@ -322,8 +329,7 @@ export function ProfileShell() {
           message={state.message}
           onConnectApple={connectApple}
           onConnectLine={connectLine}
-          reviewerAvailable={reviewerAvailable}
-          onOpenReviewerAccess={() => setState({ status: "reviewerAccess" })}
+          onActivateReviewerAccess={activateReviewerAccess}
         />
       ) : null}
       {state.status === "reviewerAccess" ? (
@@ -400,21 +406,27 @@ function DisconnectedProfile({
   message,
   onConnectApple,
   onConnectLine,
-  onOpenReviewerAccess,
-  reviewerAvailable,
+  onActivateReviewerAccess,
 }: {
   appleAvailable: boolean;
   appleDeletionGuidance?: boolean;
   message?: string;
   onConnectApple: () => void;
   onConnectLine: () => void;
-  onOpenReviewerAccess: () => void;
-  reviewerAvailable: boolean;
+  onActivateReviewerAccess: () => void;
 }) {
   return (
     <>
       <View style={styles.header}>
-        <Image source={logoSource} style={styles.avatarImage} resizeMode="contain" />
+        <Pressable
+          accessibilityLabel="JAOTHUI"
+          accessibilityRole="imagebutton"
+          onPress={onActivateReviewerAccess}
+          style={styles.reviewerLogoActivation}
+          testID="reviewer-logo-activation"
+        >
+          <Image source={logoSource} style={styles.avatarImage} resizeMode="contain" />
+        </Pressable>
         <View style={styles.headerText}>
           <Text style={styles.eyebrow}>โปรไฟล์</Text>
           <Text style={styles.title}>เข้าสู่ระบบ JAOTHUI</Text>
@@ -471,27 +483,6 @@ function DisconnectedProfile({
         <Text style={styles.authHint}>Bitkub NEXT ใช้สำหรับผูก wallet หลังเข้าสู่ระบบ</Text>
       </View>
 
-      {reviewerAvailable ? (
-        <View style={styles.reviewerEntryCard}>
-          <View style={styles.reviewerEntryCopy}>
-            <Text style={styles.reviewerEntryTitle}>Reviewer access</Text>
-            <Text style={styles.reviewerEntryMessage}>
-              สำหรับผู้ตรวจสอบ App Store และ Google Play เท่านั้น
-            </Text>
-          </View>
-          <Pressable
-            accessibilityHint="เปิดหน้าลงชื่อเข้าใช้สำหรับผู้ตรวจสอบแอป"
-            accessibilityLabel="Reviewer access"
-            accessibilityRole="button"
-            onPress={onOpenReviewerAccess}
-            style={styles.reviewerEntryButton}
-            testID="reviewer-access-entry"
-          >
-            <Text style={styles.reviewerEntryButtonText}>เข้าสู่ระบบ</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>บัญชีและฟาร์ม</Text>
         {appleAvailable ? <SettingsRow label="บัญชี Apple" /> : null}
@@ -518,7 +509,7 @@ function ReviewerAccessProfile({
 
   const submit = useCallback(async () => {
     if (!username.trim() || !password) {
-      setErrorMessage("กรอกชื่อผู้ใช้และรหัสผ่านที่ได้รับสำหรับการตรวจสอบ");
+      setErrorMessage(reviewerAccessCopy.missingCredentials);
       return;
     }
 
@@ -527,7 +518,7 @@ function ReviewerAccessProfile({
     try {
       await onSubmit(username, password);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "ไม่สามารถเข้าสู่ระบบ reviewer ได้");
+      setErrorMessage(error instanceof Error ? error.message : reviewerAccessCopy.signInFailed);
     } finally {
       setSubmitting(false);
     }
@@ -535,32 +526,32 @@ function ReviewerAccessProfile({
 
   return (
     <View style={styles.reviewerLoginCard}>
-      <Text style={styles.eyebrow}>Reviewer access</Text>
-      <Text style={styles.title}>เข้าสู่ระบบสำหรับผู้ตรวจสอบ</Text>
+      <Text style={styles.eyebrow}>{reviewerAccessCopy.eyebrow}</Text>
+      <Text style={styles.title}>{reviewerAccessCopy.title}</Text>
       <Text style={styles.reviewerLoginMessage}>
-        ใช้ข้อมูลสำหรับการตรวจสอบที่ให้ไว้ใน App Store Connect หรือ Google Play Console เท่านั้น
+        {reviewerAccessCopy.message}
       </Text>
-      <Text style={styles.inputLabel}>Username</Text>
+      <Text style={styles.inputLabel}>{reviewerAccessCopy.usernameLabel}</Text>
       <TextInput
         accessibilityLabel="Reviewer username"
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
         onChangeText={setUsername}
-        placeholder="Username"
+        placeholder={reviewerAccessCopy.usernamePlaceholder}
         placeholderTextColor={colors.muted}
         style={styles.reviewerInput}
         testID="reviewer-username-input"
         value={username}
       />
-      <Text style={styles.inputLabel}>Password</Text>
+      <Text style={styles.inputLabel}>{reviewerAccessCopy.passwordLabel}</Text>
       <TextInput
         accessibilityLabel="Reviewer password"
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
         onChangeText={setPassword}
-        placeholder="Password"
+        placeholder={reviewerAccessCopy.passwordPlaceholder}
         placeholderTextColor={colors.muted}
         secureTextEntry
         style={styles.reviewerInput}
@@ -569,7 +560,7 @@ function ReviewerAccessProfile({
       />
       {errorMessage ? <Text style={styles.reviewerError}>{errorMessage}</Text> : null}
       <Pressable
-        accessibilityHint="ส่งข้อมูลไปยัง reviewer sandbox ของ JAOTHUI"
+        accessibilityHint={reviewerAccessCopy.signInAccessibilityHint}
         accessibilityLabel="Sign in to reviewer sandbox"
         accessibilityRole="button"
         disabled={submitting}
@@ -577,7 +568,7 @@ function ReviewerAccessProfile({
         style={[styles.linkButton, submitting && styles.disabledAction]}
         testID="reviewer-sign-in"
       >
-        <Text style={styles.linkText}>{submitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ reviewer"}</Text>
+        <Text style={styles.linkText}>{submitting ? reviewerAccessCopy.signingIn : reviewerAccessCopy.signIn}</Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -585,7 +576,7 @@ function ReviewerAccessProfile({
         style={styles.reviewerBackButton}
         testID="reviewer-access-back"
       >
-        <Text style={styles.reviewerBackText}>กลับไปหน้าโปรไฟล์</Text>
+        <Text style={styles.reviewerBackText}>{reviewerAccessCopy.back}</Text>
       </Pressable>
     </View>
   );
@@ -815,6 +806,12 @@ const styles = StyleSheet.create({
     height: 56,
     width: 56,
   },
+  reviewerLogoActivation: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: spacing.touchTarget,
+    minWidth: spacing.touchTarget,
+  },
   avatarPhoto: {
     height: "100%",
     width: "100%",
@@ -928,44 +925,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
-  },
-  reviewerEntryCard: {
-    alignItems: "center",
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderStrong,
-    borderRadius: spacing.cardRadius,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.md,
-    justifyContent: "space-between",
-    marginTop: spacing.md,
-    padding: spacing.md,
-  },
-  reviewerEntryCopy: { flex: 1 },
-  reviewerEntryTitle: {
-    color: colors.gold,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  reviewerEntryMessage: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: spacing.xs,
-  },
-  reviewerEntryButton: {
-    alignItems: "center",
-    borderColor: colors.borderStrong,
-    borderRadius: spacing.pillRadius,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: spacing.touchTarget,
-    paddingHorizontal: spacing.md,
-  },
-  reviewerEntryButtonText: {
-    color: colors.gold,
-    fontSize: 12,
-    fontWeight: "900",
   },
   reviewerLoginCard: {
     backgroundColor: colors.surface,
