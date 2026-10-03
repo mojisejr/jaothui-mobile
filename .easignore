@@ -1,0 +1,23 @@
+# Keep local evidence, environments and generated native outputs out of uploads.
+# This file replaces .gitignore for EAS archive selection.
+.git/
+.expo/
+.expo-shared/
+dist/
+web-build/
+node_modules/
+android/
+ios/
+.env*
+!.env.example
+.oracle-eye/
+.playwright/
+.playwright-mcp/
+.tmp/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.lockb
+.DS_Store
+*.swp
+expo-env.d.ts

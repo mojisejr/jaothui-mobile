@@ -81,6 +81,9 @@ export type MobileHome = {
   stats: {
     id: string;
     value: string;
+    count?: number | null;
+    availability?: "available" | "unavailable";
+    observedAt?: string | null;
     unit: string;
     label: string;
   }[];

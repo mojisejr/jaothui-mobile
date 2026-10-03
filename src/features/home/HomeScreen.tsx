@@ -1,15 +1,18 @@
 import { useRouter } from "expo-router";
-import { useCallback } from "react";
-import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Image, ImageBackground, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { getHome, getNewsEvents } from "@/api/jaothui";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { Screen } from "@/components/Screen";
 import { Skeleton } from "@/components/Skeleton";
 import { StateBlock } from "@/components/StateBlock";
-import { StatCard } from "@/components/StatCard";
-import { colors, radius, shadow, spacing, typography } from "@/design/tokens";
+import { StatCard, StatGlyphRuler } from "@/components/StatCard";
+import { bottomNav, colors, radius, shadow, spacing, typography } from "@/design/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { NewsEventRail } from "./NewsEventRail";
+import { createStatPresentation, statsIntersectViewport, type GlyphMetrics } from "./countUp";
+import { useStatEnvironment } from "./useStatEnvironment";
 
 const heroImage = require("@/assets/images/jaothui-v2-hero-image.png");
 const logoSource = require("@/assets/images/thuiLogo.png");
@@ -19,6 +22,22 @@ export function HomeScreen() {
   const loadHome = useCallback(() => getHome(), []);
   const loadNewsEvents = useCallback(() => getNewsEvents(), []);
   const state = useAsyncResource(loadHome);
+  const presentation = useRef(createStatPresentation()).current;
+  const { reduceMotion, active } = useStatEnvironment();
+  const { fontScale } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [measurement, setMeasurement] = useState<{ fontScale: number; metrics: GlyphMetrics } | null>(null);
+  const glyphMetrics = measurement?.fontScale === fontScale ? measurement.metrics : null;
+  const onGlyphMetrics = useCallback((metrics: GlyphMetrics) => setMeasurement((previous) =>
+    previous?.fontScale === fontScale && previous.metrics.digit === metrics.digit && previous.metrics.comma === metrics.comma
+      ? previous : { fontScale, metrics }), [fontScale]);
+  const statsLayout = useRef<{ y: number; height: number } | null>(null);
+  const viewport = useRef({ offset: 0, height: 0 });
+  const [visible, setVisible] = useState<boolean | null>(null);
+  const refreshVisibility = useCallback(() => {
+    const next = statsIntersectViewport(statsLayout.current, viewport.current);
+    setVisible((previous) => previous === next ? previous : next);
+  }, []);
   const newsEventsState = useAsyncResource(loadNewsEvents);
   const heroSubtitle =
     state.status === "success" && state.data.hero.subtitle !== "Thai Buffalo Platform"
@@ -28,7 +47,17 @@ export function HomeScreen() {
     state.status === "success" ? state.data.hero.primaryAction.label : "ค้นหาควาย";
 
   return (
-    <Screen activeTab="home">
+    <Screen activeTab="home" onViewportLayout={(event) => {
+      const height = Math.max(0, event.nativeEvent.layout.height - bottomNav.height - insets.bottom);
+      viewport.current.height = height;
+      refreshVisibility();
+    }} onScroll={(event) => {
+      const offset = event.nativeEvent.contentOffset.y;
+      // Only a visibility boundary rerenders Home, never every animation frame.
+      viewport.current.offset = offset;
+      refreshVisibility();
+    }}>
+      <StatGlyphRuler key={fontScale} onMetrics={onGlyphMetrics} />
       <ImageBackground source={heroImage} resizeMode="cover" style={styles.hero} imageStyle={styles.heroImage}>
         <View style={styles.heroScrim} />
         <View style={styles.heroContent}>
@@ -75,9 +104,14 @@ export function HomeScreen() {
             <Text style={styles.trustText}>ข้อมูลจริงจากระบบ JAOTHUI สำหรับค้นหา ตรวจสอบ และดูใบรับรอง</Text>
           </View>
 
-          <View style={styles.statsGrid}>
+          <View style={styles.statsGrid} onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            statsLayout.current = { y, height };
+            refreshVisibility();
+          }}>
             {state.data.stats.map((item) => (
-              <StatCard key={item.id} value={item.value} unit={item.unit} label={item.label} />
+              <StatCard key={item.id} id={item.id} value={item.value} count={item.count} availability={item.availability} unit={item.unit} label={item.label}
+                visible={visible} active={active} reduceMotion={reduceMotion} glyphMetrics={glyphMetrics} presentation={presentation} />
             ))}
           </View>
 

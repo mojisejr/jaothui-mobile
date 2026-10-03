@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle, type ScrollViewProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav, type BottomNavTab } from "@/components/BottomNav";
 import { bottomNav, colors, spacing } from "@/design/tokens";
@@ -9,6 +9,8 @@ type AppShellProps = PropsWithChildren<{
   contentStyle?: StyleProp<ViewStyle>;
   scroll?: boolean;
   showBottomNav?: boolean;
+  onScroll?: ScrollViewProps["onScroll"];
+  onViewportLayout?: ScrollViewProps["onLayout"];
 }>;
 
 export function AppShell({
@@ -17,6 +19,8 @@ export function AppShell({
   contentStyle,
   scroll = true,
   showBottomNav = true,
+  onScroll,
+  onViewportLayout,
 }: AppShellProps) {
   const insets = useSafeAreaInsets();
   const topInset = insets.top;
@@ -36,6 +40,9 @@ export function AppShell({
   return (
     <View style={styles.safe}>
       <ScrollView
+        onScroll={onScroll}
+        onLayout={onViewportLayout}
+        scrollEventThrottle={onScroll ? 16 : undefined}
         contentContainerStyle={[styles.scrollContent, { paddingTop: topInset, paddingBottom: bottomInset }, contentStyle]}
         showsVerticalScrollIndicator={false}
       >
