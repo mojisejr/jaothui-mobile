@@ -1,7 +1,7 @@
 {
   "name": "jaothui-mobile",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "dependencies": {
     "expo": "~54.0.36",
     "expo-apple-authentication": "~8.0.8",

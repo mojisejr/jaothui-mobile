@@ -23,6 +23,32 @@ const apiBaseUrl = (readEnvValue("EXPO_PUBLIC_JAOTHUI_API_BASE_URL") || "http://
 
 const MICROCHIP_PATTERN = /^\d{12,}$/;
 const CERT_FIXTURE = "764040226601197";
+const requireHomeCounts = process.env.JAOTHUI_REQUIRE_HOME_STATS_COUNT === "1";
+
+function assertHomeStats(stats) {
+  if (!Array.isArray(stats) || stats.length !== 4) throw new Error("/home must expose four stats");
+  const ids = new Set();
+  for (const stat of stats) {
+    for (const key of ["id", "value", "unit", "label"]) {
+      if (typeof stat[key] !== "string") throw new Error(`/home stat missing string ${key}`);
+    }
+    if (ids.has(stat.id)) throw new Error("/home duplicate stat id");
+    ids.add(stat.id);
+    if (requireHomeCounts && !("count" in stat)) throw new Error(`/home ${stat.id} missing required new count contract`);
+    if ("count" in stat) {
+      if (stat.count !== null && (!Number.isSafeInteger(stat.count) || stat.count < 0)) throw new Error(`/home ${stat.id} invalid count`);
+      const expected = stat.count === null ? "—" : String(stat.count).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      if (stat.value !== expected) throw new Error(`/home ${stat.id} value/count mismatch`);
+    }
+    if ("availability" in stat && !["available", "unavailable"].includes(stat.availability)) throw new Error(`/home ${stat.id} invalid availability`);
+    if (stat.availability === "unavailable" && stat.count !== null) throw new Error(`/home ${stat.id} unavailable must have null count`);
+    if (stat.availability === "available" && stat.count === null) throw new Error(`/home ${stat.id} available must have numeric count`);
+    if ("observedAt" in stat && stat.observedAt !== null && (typeof stat.observedAt !== "string" || !Number.isFinite(Date.parse(stat.observedAt)))) throw new Error(`/home ${stat.id} invalid observation timestamp`);
+    if (requireHomeCounts && (!("availability" in stat) || !("observedAt" in stat))) throw new Error(`/home ${stat.id} missing availability/observation fields`);
+    if (requireHomeCounts && stat.availability === "available" && stat.observedAt === null) throw new Error(`/home ${stat.id} available stat missing observation timestamp`);
+  }
+  for (const id of ["farmers", "buffalos", "events", "verified"]) if (!ids.has(id)) throw new Error(`/home missing stat ${id}`);
+}
 
 async function mobileGet(path) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -80,6 +106,7 @@ function assertNewsEventShape(item, source) {
 }
 
 const home = await mobileGet("/api/mobile/v1/home");
+assertHomeStats(home.stats);
 if (!Array.isArray(home.featured)) throw new Error("/home featured is not an array");
 for (const [index, buffalo] of home.featured.entries()) {
   assertBuffaloCardShape(buffalo, `/home featured[${index}]`);
@@ -107,4 +134,4 @@ if (dirtyRows.length > 0) {
   );
 }
 
-console.log("Phase 4A API contract check passed");
+console.log(`Phase 4A API contract check passed | Home stats ${requireHomeCounts ? "numeric contract required" : "additive old/new compatible"}`);

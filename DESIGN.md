@@ -328,6 +328,11 @@ a new component.
 ### Home
 - Uses `/api/mobile/v1/home`.
 - Shows a premium hero, real stats, featured buffalo, and a primary path to the center journey.
+- Stats use additive numeric `count`, `availability`, and `observedAt`; legacy `value`-only payloads stay static. Never parse formatted strings as numeric authority.
+- First prepared Home presentation counts 0 to the exact target over `motion.countUpDurationMs` (1,200ms), ease-out cubic; no overshoot, decorative `+`, repeat on retry/refocus/scroll-back, or parent rerender per frame.
+- Premeasure native digit/comma glyphs during loading. Reserve every digit position with the widest glyph plus a safety margin, overlay only visual numerals, and keep units/labels fixed. Tabular font support alone is not layout proof.
+- Final label/count/unit remain accessible; intermediate text and hidden rulers are excluded. Zero is immediate, unavailable is `—`, and old payloads retain their final string.
+- Subscribe before querying OS Reduce Motion. Pending/failed preparation already exposed as final must not later reset to zero; background/blur cancels and settles. A real new Home mount can play again.
 - Replaces proof-app wording with product copy.
 - Loading uses skeletons; errors use `StateBlock`.
 
@@ -355,6 +360,7 @@ a new component.
 ## Animation Rules
 
 Allowed:
+- one-shot Home count-up after successful numeric data and preparation, triggered by actual ScrollView visibility; no per-frame list/gallery rendering;
 - `Pressable` opacity or scale feedback (`motion.pressScale`, `motion.pressOpacity`);
 - skeleton pulse (`motion.skeletonDurationMs`);
 - optional one-time hero fade/slide after data resolves;
@@ -396,3 +402,4 @@ The stutter gate is binding:
   otherwise keep text-only controls until the dependency decision is explicit.
 - RN Web evidence is advisory/regression proof; Samsung Flip7 Expo Go remains the acceptance device
   for final mobile feel.
+- Home count-up acceptance separates deterministic/RN Web checks from native installed runtime observation: a named iOS simulator JAOTHUI dev-client can prove iOS Native Eye only; Expo Go cannot substitute for dev-client/packaging proof. Android native runtime and physical performance remain pending until observed, even if EAS packaging succeeds.

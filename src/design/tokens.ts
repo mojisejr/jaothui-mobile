@@ -95,6 +95,7 @@ export const skeleton = {
 } as const;
 
 export const motion = {
+  countUpDurationMs: 1200,
   pressScale: 0.98,
   pressOpacity: 0.82,
   skeletonDurationMs: 1200,
