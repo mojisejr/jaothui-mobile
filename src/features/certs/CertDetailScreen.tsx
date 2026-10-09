@@ -4,6 +4,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { getCertCertificate, getCertDetail } from "@/api/jaothui";
 import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
+import { BuffaloPhoto } from "@/components/BuffaloPhoto";
 import { StateBlock } from "@/components/StateBlock";
 import { colors, radius, shadow, spacing } from "@/design/tokens";
 import { hasCertificateSummary } from "@/features/certs/certificateAvailability";
@@ -150,19 +151,13 @@ function CertDetailContent({
   return (
     <View style={styles.content}>
       <View style={styles.heroImageFrame}>
-        {buffalo.imageUrl ? (
-          <Image source={{ uri: buffalo.imageUrl }} style={styles.heroImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.imageFallback}>
-            <Text style={styles.imageFallbackText}>JAOTHUI</Text>
-          </View>
-        )}
-        <View style={styles.ageBadge}>
-          <Text style={styles.ageBadgeText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
-        </View>
+        <BuffaloPhoto uri={buffalo.imageUrl} label={displayValue(buffalo.name, "ไม่มีชื่อ")} />
       </View>
 
       <View style={styles.titleBlock}>
+        <View style={styles.ageBadge}>
+          <Text style={styles.ageBadgeText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
+        </View>
         <Text style={styles.eyebrow}>ใบพันธุ์ประวัติ</Text>
         <Text style={styles.name}>{displayValue(buffalo.name, "ไม่มีชื่อ")}</Text>
         <Text style={styles.microchip}>{displayValue(buffalo.microchip)}</Text>
@@ -348,30 +343,14 @@ const styles = StyleSheet.create({
     width: "100%",
     ...shadow.gold,
   },
-  heroImage: {
-    height: "100%",
-    width: "100%",
-  },
-  imageFallback: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-  },
-  imageFallbackText: {
-    color: colors.gold,
-    fontSize: 20,
-    fontWeight: "900",
-  },
   ageBadge: {
-    backgroundColor: colors.overlayBadge,
+    alignSelf: "flex-start",
+    backgroundColor: colors.surfaceRaised,
     borderColor: colors.borderSoft,
     borderRadius: spacing.pillRadius,
     borderWidth: 1,
-    bottom: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
-    position: "absolute",
-    right: spacing.sm,
   },
   ageBadgeText: {
     color: colors.gold,

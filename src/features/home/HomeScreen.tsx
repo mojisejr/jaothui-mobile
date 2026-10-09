@@ -168,7 +168,9 @@ function HomeSkeleton() {
           <View key={index} style={styles.skeletonFeatureCard}>
             <Skeleton variant="image" />
             <View style={styles.skeletonFeatureBody}>
+              <Skeleton variant="pill" style={styles.skeletonFeatureAge} />
               <Skeleton style={styles.skeletonFeatureName} />
+              <Skeleton style={styles.skeletonFeatureMeta} />
               <Skeleton style={styles.skeletonFeatureMeta} />
             </View>
           </View>
@@ -357,15 +359,22 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     borderRadius: radius.card,
     borderWidth: 1,
-    flex: 1,
-    minWidth: 150,
+    flexBasis: "45%",
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
     overflow: "hidden",
   },
   skeletonFeatureBody: {
-    gap: spacing.xs,
+    gap: spacing.xxs,
     padding: spacing.sm,
   },
+  skeletonFeatureAge: {
+    height: 26,
+    width: 68,
+  },
   skeletonFeatureName: {
+    height: 18,
     width: "72%",
   },
   skeletonFeatureMeta: {
