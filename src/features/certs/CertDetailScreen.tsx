@@ -6,7 +6,7 @@ import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
 import { BuffaloPhoto } from "@/components/BuffaloPhoto";
 import { StateBlock } from "@/components/StateBlock";
-import { colors, radius, shadow, spacing } from "@/design/tokens";
+import { colors, radius, spacing } from "@/design/tokens";
 import { hasCertificateSummary } from "@/features/certs/certificateAvailability";
 import { shareOrDownloadCertificate } from "@/features/certs/certificateFile";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
@@ -334,28 +334,21 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   heroImageFrame: {
-    aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderSoft,
-    borderRadius: radius.card,
+    aspectRatio: 3 / 2,
+    backgroundColor: colors.surface,
+    borderColor: colors.photoHairline,
+    borderRadius: radius.photo,
     borderWidth: 1,
     overflow: "hidden",
     width: "100%",
-    ...shadow.gold,
   },
   ageBadge: {
     alignSelf: "flex-start",
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderSoft,
-    borderRadius: spacing.pillRadius,
-    borderWidth: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
   },
   ageBadgeText: {
     color: colors.gold,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "600",
   },
   titleBlock: {
     gap: spacing.xs,

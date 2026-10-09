@@ -25,8 +25,8 @@ function elements(source, name) {
 function verify({ photo, card, detail, home }) {
   assert.match(photo, /resizeMode="contain"/);
   assert.doesNotMatch(photo, /resizeMode="(?:cover|stretch)"/);
-  assert.match(photo, /padding: spacing\.xs/);
-  assert.match(photo, /backgroundColor: colors\.surfaceRaised/);
+  assert.match(photo, /padding: spacing\.xxs/);
+  assert.match(photo, /backgroundColor: colors\.surface,/);
   assert.match(photo, /<PhotoSource key=\{uri \|\| "missing"\}/);
   assert.match(photo, /onError=\{\(\) => setFailed\(true\)\}/);
   assert.doesNotMatch(photo, /transform:|getSize\(|\.\.\.props/);
@@ -38,7 +38,16 @@ function verify({ photo, card, detail, home }) {
     const bodies = elements(source, "View").filter((text) => text.startsWith(`<View style={styles.${body}}>`));
     assert.equal(bodies.length, 1);
     assert.match(bodies[0], /styles\.ageBadge/);
-    assert.match(source, /aspectRatio: 4 \/ 3/);
+    assert.match(source, /aspectRatio: 3 \/ 2/);
+    const frameStyle = source.match(new RegExp(`${frame}: \\{([\\s\\S]*?)\\n  \\},`))?.[1];
+    assert.ok(frameStyle);
+    assert.match(frame === "imageFrame" ? source : frameStyle, /borderRadius: radius\.photo/);
+    assert.match(frame === "imageFrame" ? source : frameStyle, /borderColor: colors\.photoHairline/);
+    assert.doesNotMatch(frame === "imageFrame" ? source : frameStyle, /\.\.\.shadow\.gold/);
+    assert.match(frameStyle, /backgroundColor: colors\.surface,/);
+    const ageStyle = source.match(/ageBadge: \{([\s\S]*?)\n  \},/)?.[1];
+    assert.ok(ageStyle);
+    assert.doesNotMatch(ageStyle, /borderWidth|backgroundColor|paddingHorizontal/);
   }
   assert.match(card, /memo\(BuffaloCardComponent\)/);
   assert.match(card, /<Pressable style=\{styles\.card\} onPress=\{onPress\}/);
@@ -50,13 +59,21 @@ function verify({ photo, card, detail, home }) {
   assert.ok(skeletonCard);
   for (const required of [/flexBasis: "45%"/, /flexGrow: 1/, /flexShrink: 1/, /minWidth: 0/]) assert.match(skeletonCard, required);
   assert.doesNotMatch(skeletonCard, /\bflex: 1/);
-  assert.match(home, /<Skeleton variant="pill" style=\{styles\.skeletonFeatureAge\}/);
+  assert.match(home, /<Skeleton variant="image" style=\{styles\.skeletonFeatureImage\}/);
+  assert.match(home, /skeletonFeatureImage: \{\s*aspectRatio: 3 \/ 2/);
+  assert.match(home, /<Skeleton style=\{styles\.skeletonFeatureAge\}/);
 }
 
 verify(sources);
 const mutants = [
   { ...sources, photo: sources.photo.replace('resizeMode="contain"', 'resizeMode="cover"') },
-  { ...sources, photo: sources.photo.replace("padding: spacing.xs", "padding: 0") },
+  { ...sources, photo: sources.photo.replace("padding: spacing.xxs", "padding: 0") },
+  { ...sources, photo: sources.photo.replace("backgroundColor: colors.surface,", "backgroundColor: colors.surfaceRaised,") },
+  { ...sources, card: sources.card.replace("borderRadius: radius.photo", "borderRadius: radius.card") },
+  { ...sources, card: sources.card.replace("aspectRatio: 3 / 2", "aspectRatio: 4 / 3") },
+  { ...sources, card: sources.card.replace('alignSelf: "flex-start",', 'alignSelf: "flex-start", borderWidth: 1,') },
+  { ...sources, detail: sources.detail.replace("aspectRatio: 3 / 2", "aspectRatio: 4 / 3") },
+  { ...sources, home: sources.home.replace("aspectRatio: 3 / 2", "aspectRatio: 4 / 3") },
   { ...sources, photo: sources.photo.replace('key={uri || "missing"}', 'key="fixed"') },
   { ...sources, card: sources.card.replace("minWidth: 0", "minWidth: 150") },
   { ...sources, card: sources.card.replace("style={styles.body}", "style={styles.imageFrame}") },

@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BuffaloPhoto } from "@/components/BuffaloPhoto";
-import { colors, shadow, spacing } from "@/design/tokens";
+import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
 
@@ -17,9 +17,6 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
         <BuffaloPhoto uri={buffalo.imageUrl} label={buffalo.name || "ไม่ทราบชื่อ"} />
       </View>
       <View style={styles.body}>
-        <View style={styles.ageBadge}>
-          <Text style={styles.ageText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
-        </View>
         <Text style={styles.name} numberOfLines={1}>
           {buffalo.name || "ไม่ทราบชื่อ"}
         </Text>
@@ -29,6 +26,9 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
         <Text style={styles.meta} numberOfLines={1}>
           วันเกิด : {formatThaiBirthdate(buffalo.birthdate)}
         </Text>
+        <View style={styles.ageBadge}>
+          <Text style={styles.ageText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -43,29 +43,23 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     borderWidth: 1,
-    borderColor: colors.borderSoft,
-    borderRadius: spacing.cardRadius,
+    borderColor: colors.photoHairline,
+    borderRadius: radius.photo,
     overflow: "hidden",
     backgroundColor: colors.surface,
-    ...shadow.gold,
   },
   imageFrame: {
-    aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceRaised,
+    aspectRatio: 3 / 2,
+    backgroundColor: colors.surface,
   },
   ageBadge: {
     alignSelf: "flex-start",
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderSoft,
-    borderWidth: 1,
-    borderRadius: spacing.pillRadius,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
+    marginTop: spacing.xxs,
   },
   ageText: {
     color: colors.gold,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   body: {
     gap: 4,

@@ -2,7 +2,7 @@ import React from "react";
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { BuffaloCard } from "../BuffaloCard";
 import { BuffaloPhoto } from "../BuffaloPhoto";
-import { colors, spacing } from "@/design/tokens";
+import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 
 // jest-expo already supplies this renderer; no application dependency is added.
@@ -56,7 +56,7 @@ describe("mounted native complete buffalo photo", () => {
     expect(image.props.accessibilityLabel).toBe("ฟ้าประทาน");
     expect(StyleSheet.flatten(image.props.style)).toEqual({ flex: 1, width: "100%" });
     const inset = tree.root.findAllByType(View)[0];
-    expect(StyleSheet.flatten(inset.props.style)).toEqual({ flex: 1, padding: spacing.xs, backgroundColor: colors.surfaceRaised });
+    expect(StyleSheet.flatten(inset.props.style)).toEqual({ flex: 1, padding: spacing.xxs, backgroundColor: colors.surface });
   });
 
   it.each([null, ""])("renders an accessible stable missing-source fallback (%s)", (uri) => {
@@ -99,10 +99,14 @@ describe("mounted native complete buffalo photo", () => {
     renderer.act(() => { tree = renderer.create(React.createElement(BuffaloCard, { buffalo, onPress })); });
     const card = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.minWidth === 0)!;
     const cardStyle = StyleSheet.flatten(card.props.style);
-    expect(cardStyle).toMatchObject({ flexBasis: "45%", flexGrow: 1, flexShrink: 1, minWidth: 0 });
-    const frame = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.aspectRatio === 4 / 3)!;
+    expect(cardStyle).toMatchObject({ flexBasis: "45%", flexGrow: 1, flexShrink: 1, minWidth: 0, borderRadius: radius.photo, borderColor: colors.photoHairline, backgroundColor: colors.surface });
+    expect(cardStyle?.shadowOpacity).toBeUndefined();
+    expect(cardStyle?.elevation).toBeUndefined();
+    const frame = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.aspectRatio === 3 / 2)!;
     expect(frame).toBeDefined();
     expect(frame.findAll((node) => typeof node.props.children === "string" && node.props.children.includes("เดือน"))).toHaveLength(0);
+    const age = tree.root.findByProps({ children: "91 เดือน" });
+    expect(StyleSheet.flatten(age.props.style)).toMatchObject({ fontWeight: "600" });
     const rendered = JSON.stringify(tree.toJSON());
     expect(rendered).toContain("91 เดือน");
     expect(rendered).toContain(buffalo.name);
@@ -116,7 +120,7 @@ describe("mounted native complete buffalo photo", () => {
     const inset = StyleSheet.flatten(tree.root.findAllByType(View)[0].props.style).padding as number;
     expect(tree.root.findByType(Image).props.resizeMode).toBe("contain");
     for (const frameWidth of [132, 166, 353, 728]) {
-      const frameHeight = frameWidth / (4 / 3);
+      const frameHeight = frameWidth / (3 / 2);
       const innerWidth = frameWidth - 2 * inset;
       const innerHeight = frameHeight - 2 * inset;
       for (const [width, height] of [[3000, 2000], [1920, 1080], [1600, 1200], [1024, 1024], [800, 1200]]) {
@@ -134,5 +138,17 @@ describe("mounted native complete buffalo photo", () => {
       const available = frameWidth * 2 + spacing.cardGap;
       expect(available * 0.45 * 2 + spacing.cardGap).toBeLessThanOrEqual(available);
     }
+  });
+
+  it("keeps the edge-filled rectangular source clear of the rounded gallery corners", () => {
+    mount();
+    const inset = StyleSheet.flatten(tree.root.findAllByType(View)[0].props.style).padding as number;
+    // The worst case is a source with exactly the inner frame's ratio: all
+    // corners sit at (inset, inset). Other contain ratios move corners inward.
+    const cornerIsSafe = (padding: number, clipRadius: number) =>
+      Math.hypot(clipRadius - padding, clipRadius - padding) <= clipRadius;
+    expect(cornerIsSafe(inset, radius.photo)).toBe(true);
+    expect(cornerIsSafe(inset, radius.card)).toBe(false); // old 18px radius is unsafe at 4px
+    expect(cornerIsSafe(0, radius.photo)).toBe(false);
   });
 });

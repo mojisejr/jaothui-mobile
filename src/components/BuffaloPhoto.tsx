@@ -41,8 +41,9 @@ function PhotoSource({ uri, label }: BuffaloPhotoProps) {
 const styles = StyleSheet.create({
   inset: {
     flex: 1,
-    padding: spacing.xs,
-    backgroundColor: colors.surfaceRaised,
+    // 4px clears a 12px rounded clip even when the source fills both axes.
+    padding: spacing.xxs,
+    backgroundColor: colors.surface,
   },
   image: {
     flex: 1,

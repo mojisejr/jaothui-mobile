@@ -209,7 +209,7 @@ mobile controls, not web buttons pasted into RN.
 - `FilterChip`: horizontal native chips. Active chip is gold fill; inactive chip is surface with
   soft border. Chips do not resize the page when toggled.
 - `StatCard`: small dense cards, 2 columns on phones. Values are foreground/gold, labels muted.
-- `BuffaloCard`: image-first card with a 4:3 image area, real age badge in the information area, name,
+- `BuffaloCard`: image-first card with a 3:2 image area, real unboxed age caption in the information area, name,
   microchip, and cert metadata. Must remain memoized and compatible with virtualized lists.
 - `SearchInput`: dark card-like field, leading search icon when an icon library is available, gold
   focus border/ring, no web browser styling assumptions.
@@ -390,12 +390,16 @@ The stutter gate is binding:
 ## Buffalo Identity Photo Contract
 
 - Home, the virtualized list, member buffalo previews and certificate detail compose `BuffaloPhoto`.
-- The parent reserves a fixed 4:3 frame; `BuffaloPhoto` owns centered native `contain`,
-  `spacing.xs` (8px) inset and `colors.surfaceRaised` letterboxing. Source pixels/URLs are unchanged.
+- The parent reserves a fixed 3:2 frame; `BuffaloPhoto` owns centered native `contain`,
+  `spacing.xxs` (4px) inset and card-matched `colors.surface` letterboxing. Source pixels/URLs are unchanged.
+- Quiet-gallery material: photo cards/detail use `radius.photo` (12px), `colors.photoHairline`
+  (8% gold) and no default `shadow.gold`. Age is an unboxed gold caption outside the photo.
+  Loading image geometry also reserves 3:2. Other cards/news/nav keep their existing tokens.
 - Head, horns, tail and legs present in the supplied rectangular source must stay visible. Smaller
   animals and unused space are accepted; source-cropped anatomy cannot be restored by presentation.
 - Age badges live in the card body/detail title, never over the image. No image-only zoom or stretch.
-- Rounded card/detail corners cannot trim the source: preserve the safe inset for every source ratio.
+- Rounded card/detail corners cannot trim the source: 4px inset clears a 12px clip even when a
+  source exactly fills the inner rectangle. Never increase that clip radius without more inset.
 - Missing or failed sources show an accessible JAOTHUI fallback without changing frame size. A URI
   change remounts only the keyed source, discarding stale failure state; slow loads keep the same frame.
 - Cards use a shrinkable 45% basis with grow/shrink and zero minimum width to keep two-column phone
