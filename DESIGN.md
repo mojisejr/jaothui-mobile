@@ -85,6 +85,9 @@ primitives:
   - name: BuffaloCard
     file: src/components/BuffaloCard.tsx
     variants: [grid, featured, skeleton]
+  - name: BuffaloPhoto
+    file: src/components/BuffaloPhoto.tsx
+    variants: [loaded, missing, failed]
   - name: SearchInput
     file: src/components/SearchInput.tsx
     variants: [default, focused, disabled]
@@ -206,7 +209,7 @@ mobile controls, not web buttons pasted into RN.
 - `FilterChip`: horizontal native chips. Active chip is gold fill; inactive chip is surface with
   soft border. Chips do not resize the page when toggled.
 - `StatCard`: small dense cards, 2 columns on phones. Values are foreground/gold, labels muted.
-- `BuffaloCard`: image-first card with a 4:3 image area, real age badge over the image, name,
+- `BuffaloCard`: image-first card with a 3:2 image area, real unboxed age caption in the information area, name,
   microchip, and cert metadata. Must remain memoized and compatible with virtualized lists.
 - `SearchInput`: dark card-like field, leading search icon when an icon library is available, gold
   focus border/ring, no web browser styling assumptions.
@@ -314,6 +317,7 @@ for this mission.
 | `FilterChip` | `src/components/FilterChip.tsx` | to build | active/inactive filter controls |
 | `StatCard` | `src/components/StatCard.tsx` | to build | compact stats |
 | `BuffaloCard` | `src/components/BuffaloCard.tsx` | exists, upgrade | virtualized grid/featured cards |
+| `BuffaloPhoto` | `src/components/BuffaloPhoto.tsx` | exists | complete identity photo, safe inset and fallback |
 | `SearchInput` | `src/components/SearchInput.tsx` | to build | list search |
 | `StateBlock` | `src/components/StateBlock.tsx` | exists, upgrade | loading/empty/error/unavailable |
 | `Skeleton` | `src/components/Skeleton.tsx` | to build | loading placeholders |
@@ -382,6 +386,27 @@ The stutter gate is binding:
   appropriate.
 - Keep image sizes bounded with fixed aspect ratios.
 - Do not add global state or broad parent rerenders for search/filter/page controls.
+
+## Buffalo Identity Photo Contract
+
+- Home, the virtualized list, member buffalo previews and certificate detail compose `BuffaloPhoto`.
+- The parent reserves a fixed 3:2 frame; `BuffaloPhoto` owns centered native `contain`,
+  `spacing.xxs` (4px) inset and card-matched `colors.surface` letterboxing. Source pixels/URLs are unchanged.
+- Quiet-gallery material: photo cards/detail use `radius.photo` (12px), `colors.photoHairline`
+  (8% gold) and no default `shadow.gold`. Age is an unboxed gold caption outside the photo.
+  Loading image geometry also reserves 3:2. Other cards/news/nav keep their existing tokens.
+- Head, horns, tail and legs present in the supplied rectangular source must stay visible. Smaller
+  animals and unused space are accepted; source-cropped anatomy cannot be restored by presentation.
+- Age badges live in the card body/detail title, never over the image. No image-only zoom or stretch.
+- Rounded card/detail corners cannot trim the source: 4px inset clears a 12px clip even when a
+  source exactly fills the inner rectangle. Never increase that clip radius without more inset.
+- Missing or failed sources show an accessible JAOTHUI fallback without changing frame size. A URI
+  change remounts only the keyed source, discarding stale failure state; slow loads keep the same frame.
+- Cards use a shrinkable 45% basis with grow/shrink and zero minimum width to keep two-column phone
+  grids in bounds. Preserve memoization, stable keys and FlatList virtualization; no per-image size requests.
+- News, decorative heroes, avatars and certificate-document images retain their independent policies.
+- Run `bun run test:buffalo-photo` for mounted native fallback/layout and geometry/mutant contracts.
+  These are deterministic checks, not installed iOS/Android visual or physical-scroll proof.
 
 ## Design Brain Links
 

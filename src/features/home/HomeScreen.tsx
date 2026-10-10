@@ -166,10 +166,12 @@ function HomeSkeleton() {
       <View style={styles.featuredGrid}>
         {Array.from({ length: 4 }).map((_, index) => (
           <View key={index} style={styles.skeletonFeatureCard}>
-            <Skeleton variant="image" />
+            <Skeleton variant="image" style={styles.skeletonFeatureImage} />
             <View style={styles.skeletonFeatureBody}>
               <Skeleton style={styles.skeletonFeatureName} />
               <Skeleton style={styles.skeletonFeatureMeta} />
+              <Skeleton style={styles.skeletonFeatureMeta} />
+              <Skeleton style={styles.skeletonFeatureAge} />
             </View>
           </View>
         ))}
@@ -354,18 +356,30 @@ const styles = StyleSheet.create({
   },
   skeletonFeatureCard: {
     backgroundColor: colors.surface,
-    borderColor: colors.borderSoft,
-    borderRadius: radius.card,
+    borderColor: colors.photoHairline,
+    borderRadius: radius.photo,
     borderWidth: 1,
-    flex: 1,
-    minWidth: 150,
+    flexBasis: "45%",
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
     overflow: "hidden",
   },
   skeletonFeatureBody: {
-    gap: spacing.xs,
+    gap: spacing.xxs,
     padding: spacing.sm,
   },
+  skeletonFeatureImage: {
+    aspectRatio: 3 / 2,
+    borderRadius: 0,
+  },
+  skeletonFeatureAge: {
+    height: 14,
+    width: 68,
+    marginTop: spacing.xxs,
+  },
   skeletonFeatureName: {
+    height: 18,
     width: "72%",
   },
   skeletonFeatureMeta: {

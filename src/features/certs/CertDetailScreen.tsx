@@ -4,8 +4,9 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { getCertCertificate, getCertDetail } from "@/api/jaothui";
 import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
+import { BuffaloPhoto } from "@/components/BuffaloPhoto";
 import { StateBlock } from "@/components/StateBlock";
-import { colors, radius, shadow, spacing } from "@/design/tokens";
+import { colors, radius, spacing } from "@/design/tokens";
 import { hasCertificateSummary } from "@/features/certs/certificateAvailability";
 import { shareOrDownloadCertificate } from "@/features/certs/certificateFile";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
@@ -150,19 +151,13 @@ function CertDetailContent({
   return (
     <View style={styles.content}>
       <View style={styles.heroImageFrame}>
-        {buffalo.imageUrl ? (
-          <Image source={{ uri: buffalo.imageUrl }} style={styles.heroImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.imageFallback}>
-            <Text style={styles.imageFallbackText}>JAOTHUI</Text>
-          </View>
-        )}
-        <View style={styles.ageBadge}>
-          <Text style={styles.ageBadgeText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
-        </View>
+        <BuffaloPhoto uri={buffalo.imageUrl} label={displayValue(buffalo.name, "ไม่มีชื่อ")} />
       </View>
 
       <View style={styles.titleBlock}>
+        <View style={styles.ageBadge}>
+          <Text style={styles.ageBadgeText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
+        </View>
         <Text style={styles.eyebrow}>ใบพันธุ์ประวัติ</Text>
         <Text style={styles.name}>{displayValue(buffalo.name, "ไม่มีชื่อ")}</Text>
         <Text style={styles.microchip}>{displayValue(buffalo.microchip)}</Text>
@@ -339,44 +334,21 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   heroImageFrame: {
-    aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderSoft,
-    borderRadius: radius.card,
+    aspectRatio: 3 / 2,
+    backgroundColor: colors.surface,
+    borderColor: colors.photoHairline,
+    borderRadius: radius.photo,
     borderWidth: 1,
     overflow: "hidden",
     width: "100%",
-    ...shadow.gold,
-  },
-  heroImage: {
-    height: "100%",
-    width: "100%",
-  },
-  imageFallback: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-  },
-  imageFallbackText: {
-    color: colors.gold,
-    fontSize: 20,
-    fontWeight: "900",
   },
   ageBadge: {
-    backgroundColor: colors.overlayBadge,
-    borderColor: colors.borderSoft,
-    borderRadius: spacing.pillRadius,
-    borderWidth: 1,
-    bottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    position: "absolute",
-    right: spacing.sm,
+    alignSelf: "flex-start",
   },
   ageBadgeText: {
     color: colors.gold,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "600",
   },
   titleBlock: {
     gap: spacing.xs,

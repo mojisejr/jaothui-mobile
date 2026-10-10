@@ -1,7 +1,7 @@
 {
   "name": "jaothui-mobile",
   "main": "expo-router/entry",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "dependencies": {
     "expo": "~54.0.36",
     "expo-apple-authentication": "~8.0.8",
@@ -48,6 +48,7 @@
     "phase4a:api-contract": "node scripts/phase4a-api-contract-check.mjs",
     "phase5:cert-contract": "node scripts/phase5-cert-contract-check.mjs",
     "test:unit": "jest --runInBand",
+    "test:buffalo-photo": "jest --runInBand src/components/__tests__/buffaloPhoto.test.ts && node scripts/buffalo-photo-contract-check.mjs",
     "test:contract": "bun run phase4a:api-contract && bun run phase5:cert-contract",
     "test": "bun run test:unit",
     "validate": "bun run phase3:static && bun run typecheck && bun run lint",

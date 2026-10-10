@@ -1,6 +1,7 @@
 import { memo } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, shadow, spacing } from "@/design/tokens";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { BuffaloPhoto } from "@/components/BuffaloPhoto";
+import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
 
@@ -13,16 +14,7 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.imageFrame}>
-        {buffalo.imageUrl ? (
-          <Image source={{ uri: buffalo.imageUrl }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <View style={styles.imageFallback}>
-            <Text style={styles.imageFallbackText}>JAOTHUI</Text>
-          </View>
-        )}
-        <View style={styles.ageBadge}>
-          <Text style={styles.ageText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
-        </View>
+        <BuffaloPhoto uri={buffalo.imageUrl} label={buffalo.name || "ไม่ทราบชื่อ"} />
       </View>
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>
@@ -34,6 +26,9 @@ function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
         <Text style={styles.meta} numberOfLines={1}>
           วันเกิด : {formatThaiBirthdate(buffalo.birthdate)}
         </Text>
+        <View style={styles.ageBadge}>
+          <Text style={styles.ageText}>{formatBuffaloAge(buffalo.ageMonths)}</Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -43,49 +38,28 @@ export const BuffaloCard = memo(BuffaloCardComponent);
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
-    minWidth: 150,
+    flexBasis: "45%",
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
     borderWidth: 1,
-    borderColor: colors.borderSoft,
-    borderRadius: spacing.cardRadius,
+    borderColor: colors.photoHairline,
+    borderRadius: radius.photo,
     overflow: "hidden",
     backgroundColor: colors.surface,
-    ...shadow.gold,
   },
   imageFrame: {
-    aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceRaised,
-  },
-  image: {
-    height: "100%",
-    width: "100%",
-  },
-  imageFallback: {
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-  },
-  imageFallbackText: {
-    color: colors.gold,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1,
+    aspectRatio: 3 / 2,
+    backgroundColor: colors.surface,
   },
   ageBadge: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    backgroundColor: colors.overlay,
-    borderColor: colors.borderSoft,
-    borderWidth: 1,
-    borderRadius: spacing.pillRadius,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    alignSelf: "flex-start",
+    marginTop: spacing.xxs,
   },
   ageText: {
     color: colors.gold,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   body: {
     gap: 4,
