@@ -17,6 +17,8 @@ export type MobileResponse<T> = MobileOk<T> | MobileErr;
 
 export type MobileBuffaloCard = {
   tokenId: number | null;
+  /** Optional exact server string; never derive this from numeric tokenId. */
+  photoTokenId?: string;
   microchip: string;
   name: string;
   imageUrl: string | null;

@@ -1,4 +1,5 @@
-import { mobileDeleteWithAuth, mobileGet, mobileGetWithAuth } from "./client";
+import { mobileDeleteWithAuth, mobileGet, mobileGetWithAuth, mobileRequest } from "./client";
+import { parsePhotoResults, photoMicrochips } from "@/photos/contract";
 import type {
   MobileBuffaloList,
   MobileBuffaloQuery,
@@ -13,6 +14,17 @@ import type {
 
 export function getHome() {
   return mobileGet<MobileHome>("/api/mobile/v1/home");
+}
+
+export async function getBuffaloPhotos(microchips: string[]) {
+  const body = { microchips: photoMicrochips(microchips) };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return parsePhotoResults(await mobileRequest<unknown>("/api/mobile/v1/buffalos/photos", {
+      method: "POST", body, signal: controller.signal,
+    }));
+  } finally { clearTimeout(timeout); }
 }
 
 export function getNewsEvents() {

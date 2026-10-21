@@ -4,6 +4,7 @@ import { BuffaloCard } from "../BuffaloCard";
 import { BuffaloPhoto } from "../BuffaloPhoto";
 import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
+import { PHOTO_CANDIDATE_TIMEOUT_MS } from "@/photos/candidateQueue";
 
 // jest-expo already supplies this renderer; no application dependency is added.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -26,6 +27,7 @@ type TestNode = {
     accessibilityLabel: string;
     children: unknown;
     onError: (...args: unknown[]) => void;
+    onLoad: () => void;
     onPress: () => void;
   };
   findByType: (type: unknown) => TestNode;
@@ -43,7 +45,7 @@ const buffalo: MobileBuffaloCard = {
 
 describe("mounted native complete buffalo photo", () => {
   let tree: ReturnType<typeof renderer.create>;
-  afterEach(() => { if (tree) renderer.act(() => tree.unmount()); });
+  afterEach(() => { if (tree) renderer.act(() => tree.unmount()); jest.useRealTimers(); });
   function mount(uri: string | null = source) {
     renderer.act(() => { tree = renderer.create(React.createElement(BuffaloPhoto, { uri, label: "ฟ้าประทาน" })); });
   }
@@ -113,6 +115,88 @@ describe("mounted native complete buffalo photo", () => {
     expect(rendered).toContain(buffalo.microchip);
     renderer.act(() => tree.root.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps same-identity good bitmap until candidate decodes, rejects stale success/error and retains on failure", () => {
+    const render = (uri: string | null, identity = "71", retry = 0) => React.createElement(BuffaloPhoto, { uri, identity, retry, label: "ฟ้าประทาน" });
+    renderer.act(() => { tree = renderer.create(render(source)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    const next = `${source}?cacheNonce=b`, newer = `${source}?cacheNonce=c`;
+    renderer.act(() => tree.update(render(next)));
+    expect(tree.root.findAllByType(Image).map((node) => node.props.source.uri)).toEqual([source, next]);
+    const stale = tree.root.findAllByType(Image)[1].props;
+    renderer.act(() => tree.update(render(newer)));
+    renderer.act(() => { stale.onLoad(); stale.onError(); });
+    expect(tree.root.findAllByType(Image).map((node) => node.props.source.uri)).toEqual([source, newer]);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    renderer.act(() => tree.update(render(newer, "71", 1)));
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onLoad());
+    const accepted = tree.root.findByType(Image);
+    expect(accepted.props.source.uri).toBe(newer);
+    renderer.act(() => tree.update(render(newer, "71", 2)));
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(tree.root.findByType(Image)).toBe(accepted);
+    renderer.act(() => tree.update(render(null, "72")));
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+  });
+
+  it("recovers earlier 404 with unchanged URI only on deliberate revision retry", () => {
+    const render = (retry: number) => React.createElement(BuffaloPhoto, { uri: source, identity: "71", label: "ฟ้าประทาน", retry });
+    renderer.act(() => { tree = renderer.create(render(0)); });
+    const stale = tree.root.findByType(Image).props;
+    renderer.act(() => stale.onError());
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+    renderer.act(() => tree.update(render(1)));
+    renderer.act(() => stale.onLoad());
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+  });
+
+  it("StrictMode effect replay accepts the initial decode and keeps its Image on an unchanged retry", () => {
+    const render = (retry: number) => React.createElement(React.StrictMode, null,
+      React.createElement(BuffaloPhoto, { uri: source, identity: "71", label: "ฟ้าประทาน", retry }));
+    renderer.act(() => { tree = renderer.create(render(0)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    const accepted = tree.root.findByType(Image);
+    renderer.act(() => tree.update(render(1)));
+    expect(tree.root.findByType(Image)).toBe(accepted);
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    renderer.act(() => tree.update(React.createElement(React.StrictMode, null,
+      React.createElement(BuffaloPhoto, { uri: `${source}?v=bad`, identity: "71", label: "ฟ้าประทาน", retry: 2 }))));
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+  });
+
+  it("four hung native loads release their permits on deadline and ignore late callbacks", () => {
+    jest.useFakeTimers();
+    renderer.act(() => {
+      tree = renderer.create(React.createElement(View, null, ...Array.from({ length: 5 }, (_, index) =>
+        React.createElement(BuffaloPhoto, { key: index, identity: String(index), uri: `${source}?v=${index}`, label: `ควาย ${index}` }))));
+    });
+    const initial = tree.root.findAllByType(Image);
+    expect(initial).toHaveLength(4);
+    const late = initial[0].props;
+    renderer.act(() => jest.advanceTimersByTime(PHOTO_CANDIDATE_TIMEOUT_MS));
+    expect(tree.root.findAllByType(Image).map((node) => node.props.source.uri)).toEqual([`${source}?v=4`]);
+    renderer.act(() => { late.onLoad(); late.onError(); });
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(tree.root.findByProps({ accessibilityLabel: "ไม่มีภาพ ควาย 0" })).toBeDefined();
+  });
+
+  it("timed-out replacement keeps good pixels, and a late load cannot cross identity", () => {
+    jest.useFakeTimers();
+    const render = (uri: string | null, identity = "71") => React.createElement(BuffaloPhoto, { uri, identity, label: "ฟ้าประทาน" });
+    renderer.act(() => { tree = renderer.create(render(source)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    renderer.act(() => tree.update(render(`${source}?v=bad`)));
+    const late = tree.root.findAllByType(Image)[1].props;
+    renderer.act(() => jest.advanceTimersByTime(PHOTO_CANDIDATE_TIMEOUT_MS));
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    renderer.act(() => tree.update(render(null, "72")));
+    renderer.act(() => late.onLoad());
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
   });
 
   it("fits complete source bounds uniformly for five ratios in narrow/card/detail frames", () => {

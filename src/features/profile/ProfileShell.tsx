@@ -1,6 +1,6 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { getProfile } from "@/api/jaothui";
 import { API_BASE_URL } from "@/api/client";
@@ -15,6 +15,8 @@ import {
 import { clearMobileSession, loadMobileSession } from "@/auth/sessionStorage";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
+import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
+import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
 import { SettingsRow } from "@/components/SettingsRow";
 import { Skeleton } from "@/components/Skeleton";
 import { StateBlock } from "@/components/StateBlock";
@@ -607,7 +609,8 @@ function ConnectedProfile({
   reviewerFixtureBusy: boolean;
   reviewerFixtureLinked: boolean;
 }) {
-  const ownedBuffalos = getOwnedBuffaloPreview(profile);
+  const ownedBuffalos = useMemo(() => getOwnedBuffaloPreview(profile), [profile]);
+  const photos = usePhotoFreshness(ownedBuffalos);
   const displayName = getProfileDisplayName(profile);
   const statusLabel = getProfileStatusLabel(profile);
   const contactLabel = getProfileContactLabel(profile);
@@ -766,11 +769,14 @@ function ConnectedProfile({
       </View> : null}
 
       {!isReviewer && ownedBuffalos.length > 0 ? (
+        <>
+        <PhotoRefreshControl refreshing={photos.refreshing} status={photos.status} onRefresh={photos.refresh} />
         <View style={styles.buffaloGrid}>
           {ownedBuffalos.map((buffalo) => (
-            <BuffaloCard key={buffalo.microchip} buffalo={buffalo} onPress={() => onOpenBuffalo(buffalo.microchip)} />
+            <BuffaloCard key={buffalo.microchip} buffalo={buffalo} photo={photos.photos.get(buffalo.microchip)} onPress={() => onOpenBuffalo(buffalo.microchip)} />
           ))}
         </View>
+        </>
       ) : !isReviewer ? (
         <StateBlock
           title="ยังไม่พบควายในบัญชีนี้"

@@ -400,8 +400,11 @@ The stutter gate is binding:
 - Age badges live in the card body/detail title, never over the image. No image-only zoom or stretch.
 - Rounded card/detail corners cannot trim the source: 4px inset clears a 12px clip even when a
   source exactly fills the inner rectangle. Never increase that clip radius without more inset.
-- Missing or failed sources show an accessible JAOTHUI fallback without changing frame size. A URI
-  change remounts only the keyed source, discarding stale failure state; slow loads keep the same frame.
+- Missing or failed sources show an accessible JAOTHUI fallback without changing frame size. Entity
+  identity keys the photo state: a changed URI loads as a bounded candidate and replaces the same-entity
+  last-good bitmap only after decode; stale callbacks cannot replace a newer candidate. An unchanged
+  successful URI keeps its Image node, while a later photo check can retry an earlier failure. Changing
+  buffalo identity clears the prior bitmap immediately. Slow loads keep the same frame.
 - Cards use a shrinkable 45% basis with grow/shrink and zero minimum width to keep two-column phone
   grids in bounds. Preserve memoization, stable keys and FlatList virtualization; no per-image size requests.
 - News, decorative heroes, avatars and certificate-document images retain their independent policies.

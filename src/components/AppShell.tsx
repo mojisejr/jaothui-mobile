@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle, type ScrollViewProps } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle, type ScrollViewProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav, type BottomNavTab } from "@/components/BottomNav";
 import { bottomNav, colors, spacing } from "@/design/tokens";
@@ -11,6 +11,8 @@ type AppShellProps = PropsWithChildren<{
   showBottomNav?: boolean;
   onScroll?: ScrollViewProps["onScroll"];
   onViewportLayout?: ScrollViewProps["onLayout"];
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }>;
 
 export function AppShell({
@@ -21,6 +23,8 @@ export function AppShell({
   showBottomNav = true,
   onScroll,
   onViewportLayout,
+  onRefresh,
+  refreshing = false,
 }: AppShellProps) {
   const insets = useSafeAreaInsets();
   const topInset = insets.top;
@@ -40,6 +44,7 @@ export function AppShell({
   return (
     <View style={styles.safe}>
       <ScrollView
+        refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} accessibilityLabel="รีเฟรชภาพ" /> : undefined}
         onScroll={onScroll}
         onLayout={onViewportLayout}
         scrollEventThrottle={onScroll ? 16 : undefined}

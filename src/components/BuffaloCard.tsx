@@ -8,13 +8,14 @@ import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
 type BuffaloCardProps = {
   buffalo: MobileBuffaloCard;
   onPress: () => void;
+  photo?: { uri: string | null; retry: number };
 };
 
-function BuffaloCardComponent({ buffalo, onPress }: BuffaloCardProps) {
+function BuffaloCardComponent({ buffalo, onPress, photo }: BuffaloCardProps) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.imageFrame}>
-        <BuffaloPhoto uri={buffalo.imageUrl} label={buffalo.name || "ไม่ทราบชื่อ"} />
+        <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={buffalo.name || "ไม่ทราบชื่อ"} />
       </View>
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>

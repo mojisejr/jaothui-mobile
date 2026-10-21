@@ -9,11 +9,13 @@ type ScreenProps = PropsWithChildren<{
   showBottomNav?: boolean;
   onScroll?: ScrollViewProps["onScroll"];
   onViewportLayout?: ScrollViewProps["onLayout"];
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }>;
 
-export function Screen({ activeTab, children, scroll = true, showBottomNav = true, onScroll, onViewportLayout }: ScreenProps) {
+export function Screen({ activeTab, children, scroll = true, showBottomNav = true, onScroll, onViewportLayout, onRefresh, refreshing }: ScreenProps) {
   return (
-    <AppShell activeTab={activeTab} scroll={scroll} showBottomNav={showBottomNav} onScroll={onScroll} onViewportLayout={onViewportLayout}>
+    <AppShell activeTab={activeTab} scroll={scroll} showBottomNav={showBottomNav} onScroll={onScroll} onViewportLayout={onViewportLayout} onRefresh={onRefresh} refreshing={refreshing}>
       {children}
     </AppShell>
   );

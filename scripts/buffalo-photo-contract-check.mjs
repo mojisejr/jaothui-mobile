@@ -27,13 +27,15 @@ function verify({ photo, card, detail, home }) {
   assert.doesNotMatch(photo, /resizeMode="(?:cover|stretch)"/);
   assert.match(photo, /padding: spacing\.xxs/);
   assert.match(photo, /backgroundColor: colors\.surface,/);
-  assert.match(photo, /<PhotoSource key=\{uri \|\| "missing"\}/);
-  assert.match(photo, /onError=\{\(\) => setFailed\(true\)\}/);
+  assert.match(photo, /<PhotoSource key=\{identity \?\? label\}/);
+  assert.match(photo, /layer\.key !== generation\.current/);
+  assert.match(photo, /onLoad=\{\(\) => finish\(true\)\}/);
+  assert.match(photo, /onError=\{\(\) => finish\(false\)\}/);
   assert.doesNotMatch(photo, /transform:|getSize\(|\.\.\.props/);
   for (const [source, frame, body] of [[card, "imageFrame", "body"], [detail, "heroImageFrame", "titleBlock"]]) {
     const frames = elements(source, "View").filter((text) => text.startsWith(`<View style={styles.${frame}}>`));
     assert.equal(frames.length, 1);
-    assert.match(frames[0], /<BuffaloPhoto uri=\{buffalo\.imageUrl\}/);
+    assert.match(frames[0], /<BuffaloPhoto uri=\{photo \? photo\.uri : buffalo\.imageUrl\} identity=\{buffalo\.microchip\}/);
     assert.doesNotMatch(frames[0], /ageBadge|<Image/);
     const bodies = elements(source, "View").filter((text) => text.startsWith(`<View style={styles.${body}}>`));
     assert.equal(bodies.length, 1);
@@ -74,10 +76,10 @@ const mutants = [
   { ...sources, card: sources.card.replace('alignSelf: "flex-start",', 'alignSelf: "flex-start", borderWidth: 1,') },
   { ...sources, detail: sources.detail.replace("aspectRatio: 3 / 2", "aspectRatio: 4 / 3") },
   { ...sources, home: sources.home.replace("aspectRatio: 3 / 2", "aspectRatio: 4 / 3") },
-  { ...sources, photo: sources.photo.replace('key={uri || "missing"}', 'key="fixed"') },
+  { ...sources, photo: sources.photo.replace('key={identity ?? label}', 'key="fixed"') },
   { ...sources, card: sources.card.replace("minWidth: 0", "minWidth: 150") },
   { ...sources, card: sources.card.replace("style={styles.body}", "style={styles.imageFrame}") },
-  { ...sources, detail: sources.detail.replace("<BuffaloPhoto uri={buffalo.imageUrl}", "<Image source={buffalo.imageUrl}") },
+  { ...sources, detail: sources.detail.replace("<BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl}", "<Image source={buffalo.imageUrl}") },
   { ...sources, home: sources.home.replace("minWidth: 0", "minWidth: 150") },
   { ...sources, home: sources.home.replace('flexBasis: "45%"', "flex: 1") },
 ];
