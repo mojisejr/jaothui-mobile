@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { BuffaloPhoto } from "@/components/BuffaloPhoto";
+import { BuffaloPhoto, BuffaloPhotoFeedback, BuffaloPhotoStatus } from "@/components/BuffaloPhoto";
 import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
@@ -14,9 +14,12 @@ type BuffaloCardProps = {
 function BuffaloCardComponent({ buffalo, onPress, photo }: BuffaloCardProps) {
   return (
     <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.imageFrame}>
-        <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={buffalo.name || "ไม่ทราบชื่อ"} />
-      </View>
+      <BuffaloPhotoFeedback key={buffalo.microchip}>
+        <View style={styles.imageFrame}>
+          <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={buffalo.name || "ไม่ทราบชื่อ"} />
+        </View>
+        <BuffaloPhotoStatus />
+      </BuffaloPhotoFeedback>
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>
           {buffalo.name || "ไม่ทราบชื่อ"}

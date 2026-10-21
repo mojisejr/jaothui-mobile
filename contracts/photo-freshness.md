@@ -48,6 +48,15 @@ accounts, sessions or database configuration.
 - The existing 3:2 contain frame, 4px inset, quiet hairline and virtualization are
   preserved. Photo refresh does not call Home/news/certificate/profile loaders or
   reset pagination, filters, scroll position or count-up presentation.
+- Image-level queued/loading feedback remains busy after metadata refresh finishes,
+  until actual `onLoad`, `onError` or the existing 15-second active-load deadline.
+  Empty/missing and failed/timed-out sources are distinct; intentional same-URI
+  retry is local to the frame and cannot invoke API/certificate/auth loaders.
+  A successful same-identity bitmap remains during update or error. Shared card/
+  detail composition reserves a consistent 44px status/action slot outside the
+  photo for updating/error/retry, without changing the 3:2 frame or obscuring
+  animal pixels. Retry stops nested card navigation. Initial loading/error lives
+  inside the otherwise empty frame; reduced motion uses static pending feedback.
 
 ## Verification boundaries
 

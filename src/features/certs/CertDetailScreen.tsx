@@ -4,7 +4,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { getCertCertificate, getCertDetail } from "@/api/jaothui";
 import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
-import { BuffaloPhoto } from "@/components/BuffaloPhoto";
+import { BuffaloPhoto, BuffaloPhotoFeedback, BuffaloPhotoStatus } from "@/components/BuffaloPhoto";
 import { StateBlock } from "@/components/StateBlock";
 import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
 import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
@@ -161,9 +161,12 @@ function CertDetailContent({
 
   return (
     <View style={styles.content}>
-      <View style={styles.heroImageFrame}>
-        <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={displayValue(buffalo.name, "ไม่มีชื่อ")} />
-      </View>
+      <BuffaloPhotoFeedback key={buffalo.microchip}>
+        <View style={styles.heroImageFrame}>
+          <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={displayValue(buffalo.name, "ไม่มีชื่อ")} />
+        </View>
+        <BuffaloPhotoStatus />
+      </BuffaloPhotoFeedback>
 
       <View style={styles.titleBlock}>
         <View style={styles.ageBadge}>

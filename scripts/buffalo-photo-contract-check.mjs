@@ -25,14 +25,20 @@ function elements(source, name) {
 function verify({ photo, card, detail, home }) {
   assert.match(photo, /resizeMode="contain"/);
   assert.doesNotMatch(photo, /resizeMode="(?:cover|stretch)"/);
-  assert.match(photo, /padding: spacing\.xxs/);
-  assert.match(photo, /backgroundColor: colors\.surface,/);
+  const insetStyle = photo.match(/inset: \{([\s\S]*?)\n  \},/)?.[1];
+  assert.ok(insetStyle);
+  assert.match(insetStyle, /padding: spacing\.xxs/);
+  assert.match(insetStyle, /backgroundColor: colors\.surface,/);
   assert.match(photo, /<PhotoSource key=\{identity \?\? label\}/);
   assert.match(photo, /layer\.key !== generation\.current/);
   assert.match(photo, /onLoad=\{\(\) => finish\(true\)\}/);
   assert.match(photo, /onError=\{\(\) => finish\(false\)\}/);
   assert.doesNotMatch(photo, /transform:|getSize\(|\.\.\.props/);
+  assert.match(photo, /statusSlot: \{ height: spacing\.touchTarget/);
+  assert.match(photo, /event\.stopPropagation\(\); retry\(\)/);
   for (const [source, frame, body] of [[card, "imageFrame", "body"], [detail, "heroImageFrame", "titleBlock"]]) {
+    assert.match(source, /<BuffaloPhotoFeedback key=\{buffalo\.microchip\}>/);
+    assert.match(source, /<BuffaloPhotoStatus \/>/);
     const frames = elements(source, "View").filter((text) => text.startsWith(`<View style={styles.${frame}}>`));
     assert.equal(frames.length, 1);
     assert.match(frames[0], /<BuffaloPhoto uri=\{photo \? photo\.uri : buffalo\.imageUrl\} identity=\{buffalo\.microchip\}/);
@@ -83,7 +89,7 @@ const mutants = [
   { ...sources, home: sources.home.replace("minWidth: 0", "minWidth: 150") },
   { ...sources, home: sources.home.replace('flexBasis: "45%"', "flex: 1") },
 ];
-for (const mutant of mutants) assert.throws(() => verify(mutant));
+for (const [index, mutant] of mutants.entries()) assert.throws(() => verify(mutant), `Policy mutant ${index + 1} must be rejected`);
 const list = read("src/features/buffalos/BuffaloListScreen.tsx");
 for (const required of ["<FlatList", "keyExtractor={keyExtractor}", "numColumns={2}", "initialNumToRender={6}", "maxToRenderPerBatch={6}", "windowSize={5}"]) assert.ok(list.includes(required));
 for (const path of ["src/features/home/HomeScreen.tsx", "src/features/buffalos/BuffaloListScreen.tsx", "src/features/profile/ProfileShell.tsx"]) assert.match(read(path), /<BuffaloCard/);
