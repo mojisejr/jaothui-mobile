@@ -70,3 +70,30 @@ SDK compatibility therefore remains **Pending**, not a green gate.
 Expo exports and RN Web observations are distinct from installed Android/iOS
 cache, AppState, physical pull gesture and packaging acceptance. Record each
 native lane independently; no Store/production/OTA readiness is implied here.
+
+## SDK 54 alignment correction — 21 October 2026
+
+This supersedes the earlier checkpoint's SDK-compatibility Pending status only.
+After explicit owner approval, the five Expo-recommended SDK 54 patch ranges are
+aligned: `expo ~54.0.37`, `expo-constants ~18.0.14`,
+`expo-file-system ~19.0.24`, `expo-updates ~29.0.20`, and
+`jest-expo ~54.0.18`. React 19.1.0, React Native 0.81.5, app version and build
+profiles are unchanged. The lock includes the required Expo CLI/config/autolinking
+transitives; compatible nested constants copies were deduplicated to 18.0.14.
+No broad dependency refresh, override, SDK-major upgrade or check suppression was
+used.
+
+Expo Doctor's static-config warning was its marker heuristic: the old dynamic
+object manually required app.json rather than returning Expo's supplied base.
+The dynamic config now follows the [official base-config function pattern](https://docs.expo.dev/workflow/configuration/).
+Exact serialized public effective configuration compares equal before/after for
+unset, production, internal and development profiles, including the existing
+development-only local-network ATS settings. No entitlement, identity, auth flow,
+production networking policy, EAS profile or uploader behavior was changed.
+
+Frozen install, `expo install --check`, Expo Doctor (18/18), validate, 108 unit
+tests, gallery's 13 mounted tests/14 policy mutants, and the synthetic API/certificate
+contracts pass. Expo exports are repeated separately with production API settings.
+This dependency/configuration readiness does not close the pre-existing formal
+DESIGN audit drift, installed Android/iOS acceptance, member-session QA, genuine
+Dashboard canary or Store release gates.
