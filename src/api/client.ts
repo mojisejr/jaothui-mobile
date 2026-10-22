@@ -26,6 +26,7 @@ type MobileRequestOptions = {
   method?: "DELETE" | "GET" | "POST";
   body?: unknown;
   bearerToken?: string | null;
+  signal?: AbortSignal;
 };
 
 export class MobileApiError extends Error {
@@ -67,6 +68,7 @@ export async function mobileRequest<T>(
     cache: "no-store",
     headers: buildHeaders({ ...options, method }),
     body: method === "POST" ? JSON.stringify(options.body ?? {}) : undefined,
+    ...(options.signal ? { signal: options.signal } : {}),
   });
   let payload: MobileResponse<T>;
   try {

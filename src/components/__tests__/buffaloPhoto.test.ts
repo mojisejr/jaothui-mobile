@@ -1,14 +1,16 @@
 import React from "react";
-import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { BuffaloCard } from "../BuffaloCard";
-import { BuffaloPhoto } from "../BuffaloPhoto";
+import { BuffaloPhoto, BuffaloPhotoFeedback, BuffaloPhotoStatus } from "../BuffaloPhoto";
+import { createPhotoCoordinator } from "@/photos/coordinator";
 import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
+import { PHOTO_CANDIDATE_TIMEOUT_MS } from "@/photos/candidateQueue";
 
 // jest-expo already supplies this renderer; no application dependency is added.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const renderer = require("react-test-renderer") as {
-  act: (callback: () => void) => void;
+  act: (callback: () => void | Promise<void>) => void | Promise<void>;
   create: (element: React.ReactElement) => {
     root: TestNode;
     toJSON: () => unknown;
@@ -24,9 +26,11 @@ type TestNode = {
     resizeMode: string;
     accessibilityRole: string;
     accessibilityLabel: string;
+    accessibilityState?: { busy?: boolean };
     children: unknown;
     onError: (...args: unknown[]) => void;
-    onPress: () => void;
+    onLoad: () => void;
+    onPress: (event?: { stopPropagation: () => void }) => void;
   };
   findByType: (type: unknown) => TestNode;
   findAllByType: (type: unknown) => TestNode[];
@@ -43,7 +47,8 @@ const buffalo: MobileBuffaloCard = {
 
 describe("mounted native complete buffalo photo", () => {
   let tree: ReturnType<typeof renderer.create>;
-  afterEach(() => { if (tree) renderer.act(() => tree.unmount()); });
+  beforeEach(() => { jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockImplementation(() => new Promise(() => {})); });
+  afterEach(() => { if (tree) renderer.act(() => tree.unmount()); jest.useRealTimers(); jest.restoreAllMocks(); });
   function mount(uri: string | null = source) {
     renderer.act(() => { tree = renderer.create(React.createElement(BuffaloPhoto, { uri, label: "ฟ้าประทาน" })); });
   }
@@ -113,6 +118,207 @@ describe("mounted native complete buffalo photo", () => {
     expect(rendered).toContain(buffalo.microchip);
     renderer.act(() => tree.root.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps same-identity good bitmap until candidate decodes, rejects stale success/error and retains on failure", () => {
+    const render = (uri: string | null, identity = "71", retry = 0) => React.createElement(BuffaloPhoto, { uri, identity, retry, label: "ฟ้าประทาน" });
+    renderer.act(() => { tree = renderer.create(render(source)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    const next = `${source}?cacheNonce=b`, newer = `${source}?cacheNonce=c`;
+    renderer.act(() => tree.update(render(next)));
+    expect(tree.root.findAllByType(Image).map((node) => node.props.source.uri)).toEqual([source, next]);
+    const stale = tree.root.findAllByType(Image)[1].props;
+    renderer.act(() => tree.update(render(newer)));
+    renderer.act(() => { stale.onLoad(); stale.onError(); });
+    expect(tree.root.findAllByType(Image).map((node) => node.props.source.uri)).toEqual([source, newer]);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    renderer.act(() => tree.update(render(newer, "71", 1)));
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onLoad());
+    const accepted = tree.root.findByType(Image);
+    expect(accepted.props.source.uri).toBe(newer);
+    renderer.act(() => tree.update(render(newer, "71", 2)));
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(tree.root.findByType(Image)).toBe(accepted);
+    renderer.act(() => tree.update(render(null, "72")));
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+  });
+
+  it("recovers earlier 404 with unchanged URI only on deliberate revision retry", () => {
+    const render = (retry: number) => React.createElement(BuffaloPhoto, { uri: source, identity: "71", label: "ฟ้าประทาน", retry });
+    renderer.act(() => { tree = renderer.create(render(0)); });
+    const stale = tree.root.findByType(Image).props;
+    renderer.act(() => stale.onError());
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+    renderer.act(() => tree.update(render(1)));
+    renderer.act(() => stale.onLoad());
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+  });
+
+  it("StrictMode effect replay accepts the initial decode and keeps its Image on an unchanged retry", () => {
+    const render = (retry: number) => React.createElement(React.StrictMode, null,
+      React.createElement(BuffaloPhoto, { uri: source, identity: "71", label: "ฟ้าประทาน", retry }));
+    renderer.act(() => { tree = renderer.create(render(0)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    const accepted = tree.root.findByType(Image);
+    renderer.act(() => tree.update(render(1)));
+    expect(tree.root.findByType(Image)).toBe(accepted);
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    renderer.act(() => tree.update(React.createElement(React.StrictMode, null,
+      React.createElement(BuffaloPhoto, { uri: `${source}?v=bad`, identity: "71", label: "ฟ้าประทาน", retry: 2 }))));
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+  });
+
+  it("four hung native loads release their permits on deadline and ignore late callbacks", () => {
+    jest.useFakeTimers();
+    renderer.act(() => {
+      tree = renderer.create(React.createElement(View, null, ...Array.from({ length: 5 }, (_, index) =>
+        React.createElement(BuffaloPhoto, { key: index, identity: String(index), uri: `${source}?v=${index}`, label: `ควาย ${index}` }))));
+    });
+    const initial = tree.root.findAllByType(Image);
+    expect(initial).toHaveLength(4);
+    const late = initial[0].props;
+    renderer.act(() => jest.advanceTimersByTime(PHOTO_CANDIDATE_TIMEOUT_MS));
+    expect(tree.root.findAllByType(Image).map((node) => node.props.source.uri)).toEqual([`${source}?v=4`]);
+    renderer.act(() => { late.onLoad(); late.onError(); });
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(tree.root.findByProps({ accessibilityLabel: "โหลดภาพไม่สำเร็จ ควาย 0" }).props.accessibilityState).toEqual({ busy: false });
+  });
+
+  it("timed-out replacement keeps good pixels, and a late load cannot cross identity", () => {
+    jest.useFakeTimers();
+    const render = (uri: string | null, identity = "71") => React.createElement(BuffaloPhoto, { uri, identity, label: "ฟ้าประทาน" });
+    renderer.act(() => { tree = renderer.create(render(source)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    renderer.act(() => tree.update(render(`${source}?v=bad`)));
+    const late = tree.root.findAllByType(Image)[1].props;
+    renderer.act(() => jest.advanceTimersByTime(PHOTO_CANDIDATE_TIMEOUT_MS));
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    renderer.act(() => tree.update(render(null, "72")));
+    renderer.act(() => late.onLoad());
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+  });
+
+  it("shows queued/loading feedback until actual onLoad, not a parent rerender or onLoadEnd", () => {
+    renderer.act(() => {
+      tree = renderer.create(React.createElement(View, null, ...Array.from({ length: 5 }, (_, index) =>
+        React.createElement(BuffaloPhoto, { key: index, identity: String(index), uri: `${source}?v=${index}`, label: `ควาย ${index}` }))));
+    });
+    expect(tree.root.findAllByType(Image)).toHaveLength(4);
+    // The fifth frame is waiting for a decode permit, but is never an unexplained black frame.
+    expect(tree.root.findByProps({ accessibilityLabel: "กำลังโหลดภาพ… ควาย 4" }).props.accessibilityState).toEqual({ busy: true });
+    const first = tree.root.findAllByType(Image)[0];
+    expect((first.props as unknown as { onLoadEnd?: unknown }).onLoadEnd).toBeUndefined();
+    renderer.act(() => first.props.onLoad());
+    expect(tree.root.findAllByType(Image)).toHaveLength(5);
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === "กำลังโหลดภาพ… ควาย 0")).toHaveLength(0);
+    expect(tree.root.findByProps({ accessibilityLabel: "กำลังโหลดภาพ… ควาย 4" }).props.accessibilityState?.busy).toBe(true);
+  });
+
+  it("distinguishes missing from failed and retries a timed-out unchanged URI without a screen loader", () => {
+    jest.useFakeTimers();
+    mount(null);
+    expect(JSON.stringify(tree.toJSON())).toContain("ยังไม่มีภาพ");
+    expect(tree.root.findAll((node) => node.props.accessibilityRole === "button")).toHaveLength(0);
+    renderer.act(() => tree.update(React.createElement(BuffaloPhoto, { uri: source, label: "ฟ้าประทาน" })));
+    const late = tree.root.findByType(Image).props;
+    renderer.act(() => jest.advanceTimersByTime(PHOTO_CANDIDATE_TIMEOUT_MS));
+    expect(JSON.stringify(tree.toJSON())).toContain("โหลดภาพไม่สำเร็จ");
+    expect(JSON.stringify(tree.toJSON())).not.toContain("ยังไม่มีภาพ");
+    const retry = tree.root.findByProps({ accessibilityLabel: "ลองโหลดภาพ ฟ้าประทาน อีกครั้ง" });
+    expect(StyleSheet.flatten(retry.props.style)).toMatchObject({ minHeight: 44, minWidth: 44 });
+    const event = { stopPropagation: jest.fn() };
+    renderer.act(() => retry.props.onPress(event));
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByType(Image).props.source.uri).toBe(source);
+    expect(tree.root.findByProps({ accessibilityLabel: "กำลังโหลดภาพ… ฟ้าประทาน" }).props.accessibilityState?.busy).toBe(true);
+    renderer.act(() => late.onLoad());
+    expect(tree.root.findByProps({ accessibilityLabel: "กำลังโหลดภาพ… ฟ้าประทาน" })).toBeDefined();
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === "กำลังโหลดภาพ… ฟ้าประทาน")).toHaveLength(0);
+    renderer.act(() => jest.advanceTimersByTime(PHOTO_CANDIDATE_TIMEOUT_MS * 2));
+    expect(tree.root.findAllByType(Image)).toHaveLength(1); // no automatic retry loop
+  });
+
+  it("reserves outside-pixel feedback, keeps good bitmap, and nested local retry never navigates", () => {
+    const onPress = jest.fn();
+    const render = (uri: string) => React.createElement(BuffaloCard, { buffalo, onPress, photo: { uri, retry: 0 } });
+    renderer.act(() => { tree = renderer.create(render(source)); });
+    const slots = () => tree.root.findAllByType(View).filter((view) => StyleSheet.flatten(view.props.style)?.height === spacing.touchTarget);
+    expect(slots()).toHaveLength(1);
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    const good = tree.root.findByType(Image);
+    renderer.act(() => tree.update(render(`${source}?v=b`)));
+    const frame = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.aspectRatio === 3 / 2)!;
+    expect(frame.findAll((node) => node.props.accessibilityLabel === "กำลังอัปเดตภาพ… ฟ้าประทาน")).toHaveLength(0);
+    expect(slots()[0].findByProps({ accessibilityLabel: "กำลังอัปเดตภาพ… ฟ้าประทาน" }).props.accessibilityState?.busy).toBe(true);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    expect(tree.root.findByType(Image)).toBe(good);
+    expect(slots()[0].findByProps({ accessibilityLabel: "อัปเดตภาพไม่สำเร็จ ฟ้าประทาน" })).toBeDefined();
+    let stopped = false;
+    const event = { stopPropagation: jest.fn(() => { stopped = true; }) };
+    renderer.act(() => {
+      tree.root.findByProps({ accessibilityLabel: "ลองโหลดภาพ ฟ้าประทาน อีกครั้ง" }).props.onPress(event);
+      // Model native bubbling: without stopPropagation the containing card would navigate.
+      if (!stopped) tree.root.props.onPress();
+    });
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
+    expect(tree.root.findAllByType(Image)[0]).toBe(good);
+    expect(tree.root.findAllByType(Image)[1].props.source.uri).toBe(`${source}?v=b`);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onLoad());
+    expect(slots()).toHaveLength(1);
+    expect(slots()[0].findAll((node) => node.props.accessibilityLabel?.includes("ภาพ"))).toHaveLength(0);
+    const accepted = tree.root.findByType(Image);
+    renderer.act(() => tree.update(render(`${source}?v=b`)));
+    expect(tree.root.findByType(Image)).toBe(accepted);
+  });
+
+  it("metadata refresh can finish while the independent image feedback remains busy", async () => {
+    const next = `${source}?cacheNonce=new`;
+    const read = jest.fn(async () => [{ microchip: buffalo.microchip, tokenId: "71", status: "ready" as const, imageUrl: next, sourceKey: next }]);
+    const coordinator = createPhotoCoordinator(read);
+    coordinator.seed([buffalo]); coordinator.setActive(true);
+    const render = () => React.createElement(BuffaloPhotoFeedback, null,
+      React.createElement(View, null, React.createElement(BuffaloPhoto, { ...coordinator.getSnapshot().photos.get(buffalo.microchip)!, label: buffalo.name! })),
+      React.createElement(BuffaloPhotoStatus));
+    renderer.act(() => { tree = renderer.create(render()); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    await coordinator.refresh(true);
+    expect(coordinator.getSnapshot().refreshing).toBe(false);
+    renderer.act(() => tree.update(render()));
+    expect(tree.root.findByProps({ accessibilityLabel: `กำลังอัปเดตภาพ… ${buffalo.name}` }).props.accessibilityState?.busy).toBe(true);
+    expect(read).toHaveBeenCalledTimes(1);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onLoad());
+    expect(tree.root.findAll((node) => Boolean(node.props.accessibilityState?.busy))).toHaveLength(0);
+    coordinator.dispose();
+  });
+
+  it("honors reduced motion and a newer OS event wins over an older pending preference query", async () => {
+    let resolve!: (enabled: boolean) => void;
+    let change!: (enabled: boolean) => void;
+    jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockReturnValue(new Promise((yes) => { resolve = yes; }));
+    const remove = jest.fn();
+    const observe = ((name: string, callback: unknown) => {
+      if (name === "reduceMotionChanged") change = callback as (enabled: boolean) => void;
+      return { remove };
+    // The native emitter has overloaded event signatures; this fixture owns only
+    // reduceMotionChanged and the public subscription.remove lifecycle.
+    }) as unknown as typeof AccessibilityInfo.addEventListener;
+    jest.spyOn(AccessibilityInfo, "addEventListener").mockImplementation(observe);
+    mount();
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+    renderer.act(() => change(false));
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+    renderer.act(() => change(true));
+    await renderer.act(async () => { resolve(false); await Promise.resolve(); });
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(tree.root.findByProps({ accessibilityLabel: "กำลังโหลดภาพ… ฟ้าประทาน" }).props.accessibilityState?.busy).toBe(true);
+    renderer.act(() => tree.unmount());
+    expect(remove).toHaveBeenCalled();
   });
 
   it("fits complete source bounds uniformly for five ratios in narrow/card/detail frames", () => {

@@ -1,11 +1,13 @@
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { getHome, getNewsEvents } from "@/api/jaothui";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { Screen } from "@/components/Screen";
 import { Skeleton } from "@/components/Skeleton";
 import { StateBlock } from "@/components/StateBlock";
+import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
+import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
 import { StatCard, StatGlyphRuler } from "@/components/StatCard";
 import { bottomNav, colors, radius, shadow, spacing, typography } from "@/design/tokens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +24,8 @@ export function HomeScreen() {
   const loadHome = useCallback(() => getHome(), []);
   const loadNewsEvents = useCallback(() => getNewsEvents(), []);
   const state = useAsyncResource(loadHome);
+  const photoEntries = useMemo(() => state.status === "success" ? state.data.featured.slice(0, 4) : [], [state.data, state.status]);
+  const photos = usePhotoFreshness(photoEntries);
   const presentation = useRef(createStatPresentation()).current;
   const { reduceMotion, active } = useStatEnvironment();
   const { fontScale } = useWindowDimensions();
@@ -47,7 +51,7 @@ export function HomeScreen() {
     state.status === "success" ? state.data.hero.primaryAction.label : "ค้นหาควาย";
 
   return (
-    <Screen activeTab="home" onViewportLayout={(event) => {
+    <Screen activeTab="home" onRefresh={photos.refresh} refreshing={photos.refreshing} onViewportLayout={(event) => {
       const height = Math.max(0, event.nativeEvent.layout.height - bottomNav.height - insets.bottom);
       viewport.current.height = height;
       refreshVisibility();
@@ -127,6 +131,7 @@ export function HomeScreen() {
               <BuffaloCard
                 key={buffalo.microchip}
                 buffalo={buffalo}
+                photo={photos.photos.get(buffalo.microchip)}
                 onPress={() =>
                   router.push({
                     pathname: "/certs/[microchip]",
@@ -136,6 +141,8 @@ export function HomeScreen() {
               />
             ))}
           </View>
+
+          <PhotoRefreshControl refreshing={photos.refreshing} status={photos.status} onRefresh={photos.refresh} />
 
           {state.data.featured.length === 0 ? (
             <StateBlock title="ยังไม่มีข้อมูลกระบือแนะนำ" message="กลับมาตรวจสอบรายการใหม่อีกครั้งภายหลัง" />

@@ -4,8 +4,11 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { getCertCertificate, getCertDetail } from "@/api/jaothui";
 import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
-import { BuffaloPhoto } from "@/components/BuffaloPhoto";
+import { BuffaloPhoto, BuffaloPhotoFeedback, BuffaloPhotoStatus } from "@/components/BuffaloPhoto";
 import { StateBlock } from "@/components/StateBlock";
+import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
+import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
+import type { PhotoDisplay } from "@/photos/contract";
 import { colors, radius, spacing } from "@/design/tokens";
 import { hasCertificateSummary } from "@/features/certs/certificateAvailability";
 import { shareOrDownloadCertificate } from "@/features/certs/certificateFile";
@@ -32,6 +35,8 @@ export function CertDetailScreen() {
   const certId = Array.isArray(microchip) ? microchip[0] : microchip;
   const loadCertDetail = useCallback(() => getCertDetail(certId), [certId]);
   const state = useAsyncResource(loadCertDetail);
+  const photoEntries = useMemo(() => state.status === "success" ? [state.data.buffalo] : [], [state.data, state.status]);
+  const photos = usePhotoFreshness(photoEntries);
   const [certificate, setCertificate] = useState<CertificateState>({
     status: "idle",
     data: null,
@@ -91,7 +96,7 @@ export function CertDetailScreen() {
   }, [certificate]);
 
   return (
-    <Screen showBottomNav={false}>
+    <Screen showBottomNav={false} onRefresh={photos.refresh} refreshing={photos.refreshing}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>กลับ</Text>
@@ -112,8 +117,11 @@ export function CertDetailScreen() {
       ) : null}
 
       {state.status === "success" ? (
+        <>
+        <PhotoRefreshControl refreshing={photos.refreshing} status={photos.status} onRefresh={photos.refresh} />
         <CertDetailContent
           buffalo={state.data.buffalo}
+          photo={photos.photos.get(state.data.buffalo.microchip)}
           certificate={certificate}
           certificateImageUri={certificateImageUri}
           fileAction={fileAction}
@@ -122,6 +130,7 @@ export function CertDetailScreen() {
           onRetryCertificate={loadCertificate}
           onShareCertificate={handleShareCertificate}
         />
+        </>
       ) : null}
     </Screen>
   );
@@ -129,6 +138,7 @@ export function CertDetailScreen() {
 
 function CertDetailContent({
   buffalo,
+  photo,
   certificate,
   certificateImageUri,
   fileAction,
@@ -138,6 +148,7 @@ function CertDetailContent({
   onShareCertificate,
 }: {
   buffalo: MobileBuffaloDetail;
+  photo?: PhotoDisplay;
   certificate: CertificateState;
   certificateImageUri: string | null;
   fileAction: "idle" | "working" | "done" | "error";
@@ -150,9 +161,12 @@ function CertDetailContent({
 
   return (
     <View style={styles.content}>
-      <View style={styles.heroImageFrame}>
-        <BuffaloPhoto uri={buffalo.imageUrl} label={displayValue(buffalo.name, "ไม่มีชื่อ")} />
-      </View>
+      <BuffaloPhotoFeedback key={buffalo.microchip}>
+        <View style={styles.heroImageFrame}>
+          <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={displayValue(buffalo.name, "ไม่มีชื่อ")} />
+        </View>
+        <BuffaloPhotoStatus />
+      </BuffaloPhotoFeedback>
 
       <View style={styles.titleBlock}>
         <View style={styles.ageBadge}>

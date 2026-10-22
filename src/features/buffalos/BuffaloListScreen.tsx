@@ -5,6 +5,8 @@ import { getBuffalos } from "@/api/jaothui";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { StateBlock } from "@/components/StateBlock";
+import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
+import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
 import { bottomNav, colors, radius, shadow, spacing } from "@/design/tokens";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import type {
@@ -54,6 +56,8 @@ export function BuffaloListScreen() {
     [filter, page, search]
   );
   const state = useAsyncResource(loadBuffalos);
+  const photoEntries = useMemo(() => state.status === "success" ? state.data.items : EMPTY_BUFFALOS, [state.data, state.status]);
+  const photos = usePhotoFreshness(photoEntries);
 
   const patchFilter = useCallback((patch: Partial<FilterState>) => {
     setFilter((current) => ({ ...current, ...patch }));
@@ -83,7 +87,7 @@ export function BuffaloListScreen() {
   );
 
   const keyExtractor = useCallback(
-    (buffalo: MobileBuffaloCard) => `${buffalo.tokenId ?? "token"}-${buffalo.microchip}`,
+    (buffalo: MobileBuffaloCard) => buffalo.microchip,
     []
   );
 
@@ -91,6 +95,7 @@ export function BuffaloListScreen() {
     ({ item }: { item: MobileBuffaloCard }) => (
       <BuffaloCard
         buffalo={item}
+        photo={photos.photos.get(item.microchip)}
         onPress={() => {
           if (!MICROCHIP_PATTERN.test(item.microchip)) return;
           router.push({
@@ -100,7 +105,7 @@ export function BuffaloListScreen() {
         }}
       />
     ),
-    [router]
+    [photos.photos, router]
   );
 
   const listData = state.status === "success" ? state.data.items : EMPTY_BUFFALOS;
@@ -111,6 +116,8 @@ export function BuffaloListScreen() {
     <AppShell activeTab="buffalo" scroll={false}>
       <FlatList
         data={listData}
+        refreshing={photos.refreshing}
+        onRefresh={photos.refresh}
         keyExtractor={keyExtractor}
         renderItem={renderBuffalo}
         numColumns={2}
@@ -123,7 +130,7 @@ export function BuffaloListScreen() {
         updateCellsBatchingPeriod={40}
         windowSize={5}
         ItemSeparatorComponent={RowSeparator}
-        ListHeaderComponent={
+        ListHeaderComponent={<>
           <ListHeader
             activeChips={activeChips}
             filter={filter}
@@ -141,7 +148,8 @@ export function BuffaloListScreen() {
             onRetry={state.reload}
             onSearchChange={setSearchInput}
           />
-        }
+          {state.status === "success" ? <PhotoRefreshControl refreshing={photos.refreshing} status={photos.status} onRefresh={photos.refresh} /> : null}
+        </>}
         ListEmptyComponent={
           state.status === "success" ? (
             <StateBlock
