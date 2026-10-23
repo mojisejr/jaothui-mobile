@@ -38,7 +38,7 @@ function verify({ photo, card, detail, home }) {
   assert.match(photo, /event\.stopPropagation\(\); retry\(\)/);
   for (const [source, frame, body] of [[card, "imageFrame", "body"], [detail, "heroImageFrame", "titleBlock"]]) {
     assert.match(source, /<BuffaloPhotoFeedback key=\{buffalo\.microchip\}>/);
-    assert.match(source, /<BuffaloPhotoStatus \/>/);
+    assert.match(source, frame === "imageFrame" ? /<BuffaloPhotoStatus footerHeight=\{buffaloCardFooterHeight\(fontScale\)\} leading=/ : /<BuffaloPhotoStatus \/>/);
     const frames = elements(source, "View").filter((text) => text.startsWith(`<View style={styles.${frame}}>`));
     assert.equal(frames.length, 1);
     assert.match(frames[0], /<BuffaloPhoto uri=\{photo \? photo\.uri : buffalo\.imageUrl\} identity=\{buffalo\.microchip\}/);
@@ -46,6 +46,12 @@ function verify({ photo, card, detail, home }) {
     const bodies = elements(source, "View").filter((text) => text.startsWith(`<View style={styles.${body}}>`));
     assert.equal(bodies.length, 1);
     assert.match(bodies[0], /styles\.ageBadge/);
+    if (frame === "imageFrame") {
+      assert.match(bodies[0], /<BuffaloPhotoStatus/);
+      assert.doesNotMatch(frames[0], /BuffaloPhotoStatus/);
+      assert.match(source, /<Text style=\{styles\.name\} numberOfLines=\{2\}/);
+      assert.match(source, /buffaloSex\(buffalo\.sex\)/);
+    }
     assert.match(source, /aspectRatio: 3 \/ 2/);
     const frameStyle = source.match(new RegExp(`${frame}: \\{([\\s\\S]*?)\\n  \\},`))?.[1];
     assert.ok(frameStyle);
@@ -58,8 +64,10 @@ function verify({ photo, card, detail, home }) {
     assert.doesNotMatch(ageStyle, /borderWidth|backgroundColor|paddingHorizontal/);
   }
   assert.match(card, /memo\(BuffaloCardComponent\)/);
-  assert.match(card, /<Pressable style=\{styles\.card\} onPress=\{onPress\}/);
-  assert.match(card, /minWidth: 0/);
+  assert.match(card, /<Pressable style=\{\[styles\.card, buffaloCardColumns\(width, fontScale\) === 1 && styles\.singleColumn\]\} onPress=\{onPress\}/);
+  const cardStyle = card.match(/card: \{([\s\S]*?)\n  \},/)?.[1];
+  assert.ok(cardStyle);
+  assert.match(cardStyle, /minWidth: 0/);
   assert.match(card, /flexBasis: "45%"/);
   assert.doesNotMatch(card, /position: "absolute"/);
   assert.match(detail, /uri: certificateImageUri[^\n]*resizeMode="contain"/);
@@ -91,7 +99,7 @@ const mutants = [
 ];
 for (const [index, mutant] of mutants.entries()) assert.throws(() => verify(mutant), `Policy mutant ${index + 1} must be rejected`);
 const list = read("src/features/buffalos/BuffaloListScreen.tsx");
-for (const required of ["<FlatList", "keyExtractor={keyExtractor}", "numColumns={2}", "initialNumToRender={6}", "maxToRenderPerBatch={6}", "windowSize={5}"]) assert.ok(list.includes(required));
+for (const required of ["<FlatList", "keyExtractor={keyExtractor}", "numColumns={columns}", "key={`buffalo-columns-${columns}`}", "buffaloCardColumns(width, fontScale)", "initialNumToRender={6}", "maxToRenderPerBatch={6}", "windowSize={5}"]) assert.ok(list.includes(required));
 for (const path of ["src/features/home/HomeScreen.tsx", "src/features/buffalos/BuffaloListScreen.tsx", "src/features/profile/ProfileShell.tsx"]) assert.match(read(path), /<BuffaloCard/);
 assert.match(read("src/features/home/NewsEventRail.tsx"), /uri: item\.coverImageUrl[^\n]*resizeMode="cover"/);
 assert.match(read("src/features/profile/ProfileShell.tsx"), /uri: avatarUrl[^\n]*resizeMode="cover"/);
