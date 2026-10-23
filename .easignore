@@ -1,6 +1,6 @@
 # Keep local evidence, environments and generated native outputs out of uploads.
 # This file replaces .gitignore for EAS archive selection.
-.git/
+.git
 .expo/
 .expo-shared/
 dist/
