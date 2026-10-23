@@ -410,6 +410,16 @@ The stutter gate is binding:
   photo geometry: same-identity update/error feedback stays outside animal pixels and the slot remains
   present when empty, so state changes cannot move the card body. Initial feedback stays inside the
   otherwise empty frame. Retry stops propagation to the enclosing card navigation.
+- Approved card composition exception: shared Home/list/owned cards move that same reserved status
+  outlet into the metadata footer beside the unboxed age; standalone detail retains its default slot.
+  The photo is followed directly by 12px body padding, with no blank status band before the title.
+  Name uses up to two lines on the left, canonical sex uses a decorative symbol plus muted Thai
+  text on the right (`male` → ผู้, `female` → เมีย, unknown → ไม่ระบุ). Never infer sex.
+  Card feedback uses short visible copy, preserves the local 44px retry, and does not truncate or
+  cap new error text. Footer height scales with OS font scale and stays fixed across photo states.
+  Below 375px or above 1.15 font scale, all shared card consumers use one column; the virtualized
+  list remounts its layout key only when its column count changes. Type size and photo/cache policy
+  remain unchanged. Other legacy typography and standalone detail status are outside this exception.
 - Missing sources retain the accessible JAOTHUI fallback without changing frame size. Entity
   identity keys the photo state: a changed URI loads as a bounded candidate and replaces the same-entity
   last-good bitmap only after decode; stale callbacks cannot replace a newer candidate. An unchanged

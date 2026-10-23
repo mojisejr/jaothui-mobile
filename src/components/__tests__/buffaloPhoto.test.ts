@@ -1,11 +1,13 @@
 import React from "react";
-import { AccessibilityInfo, ActivityIndicator, Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Dimensions, Image, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { BuffaloCard } from "../BuffaloCard";
 import { BuffaloPhoto, BuffaloPhotoFeedback, BuffaloPhotoStatus } from "../BuffaloPhoto";
 import { createPhotoCoordinator } from "@/photos/coordinator";
 import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 import { PHOTO_CANDIDATE_TIMEOUT_MS } from "@/photos/candidateQueue";
+import { buffaloSex } from "@/utils/buffaloSex";
+import { buffaloCardColumns, buffaloCardFooterHeight } from "../buffaloCardLayout";
 
 // jest-expo already supplies this renderer; no application dependency is added.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -28,6 +30,8 @@ type TestNode = {
     accessibilityLabel: string;
     accessibilityState?: { busy?: boolean };
     children: unknown;
+    numberOfLines?: number;
+    maxFontSizeMultiplier?: number;
     onError: (...args: unknown[]) => void;
     onLoad: () => void;
     onPress: (event?: { stopPropagation: () => void }) => void;
@@ -47,8 +51,12 @@ const buffalo: MobileBuffaloCard = {
 
 describe("mounted native complete buffalo photo", () => {
   let tree: ReturnType<typeof renderer.create>;
-  beforeEach(() => { jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockImplementation(() => new Promise(() => {})); });
-  afterEach(() => { if (tree) renderer.act(() => tree.unmount()); jest.useRealTimers(); jest.restoreAllMocks(); });
+  const originalWindow = Dimensions.get("window");
+  beforeEach(() => {
+    Dimensions.set({ window: { width: 390, height: 844, scale: 1, fontScale: 1 } });
+    jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockImplementation(() => new Promise(() => {}));
+  });
+  afterEach(() => { if (tree) renderer.act(() => tree.unmount()); Dimensions.set({ window: originalWindow }); jest.useRealTimers(); jest.restoreAllMocks(); });
   function mount(uri: string | null = source) {
     renderer.act(() => { tree = renderer.create(React.createElement(BuffaloPhoto, { uri, label: "ฟ้าประทาน" })); });
   }
@@ -253,11 +261,11 @@ describe("mounted native complete buffalo photo", () => {
     const good = tree.root.findByType(Image);
     renderer.act(() => tree.update(render(`${source}?v=b`)));
     const frame = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.aspectRatio === 3 / 2)!;
-    expect(frame.findAll((node) => node.props.accessibilityLabel === "กำลังอัปเดตภาพ… ฟ้าประทาน")).toHaveLength(0);
-    expect(slots()[0].findByProps({ accessibilityLabel: "กำลังอัปเดตภาพ… ฟ้าประทาน" }).props.accessibilityState?.busy).toBe(true);
+    expect(frame.findAll((node) => node.props.accessibilityLabel === "อัปเดตภาพ… ฟ้าประทาน")).toHaveLength(0);
+    expect(slots()[0].findByProps({ accessibilityLabel: "อัปเดตภาพ… ฟ้าประทาน" }).props.accessibilityState?.busy).toBe(true);
     renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
     expect(tree.root.findByType(Image)).toBe(good);
-    expect(slots()[0].findByProps({ accessibilityLabel: "อัปเดตภาพไม่สำเร็จ ฟ้าประทาน" })).toBeDefined();
+    expect(slots()[0].findByProps({ accessibilityLabel: "อัปเดตไม่ได้ ฟ้าประทาน" })).toBeDefined();
     let stopped = false;
     const event = { stopPropagation: jest.fn(() => { stopped = true; }) };
     renderer.act(() => {
@@ -356,5 +364,88 @@ describe("mounted native complete buffalo photo", () => {
     expect(cornerIsSafe(inset, radius.photo)).toBe(true);
     expect(cornerIsSafe(inset, radius.card)).toBe(false); // old 18px radius is unsafe at 4px
     expect(cornerIsSafe(0, radius.photo)).toBe(false);
+  });
+
+  it.each([
+    ["male", "ผู้", "เพศผู้"], [" FEMALE ", "เมีย", "เพศเมีย"],
+    [null, "ไม่ระบุ", "ไม่ระบุเพศ"], ["unknown", "ไม่ระบุ", "ไม่ระบุเพศ"],
+  ])("renders real card sex %s, two-line Thai title and footer after metadata", (sex, label, accessibleLabel) => {
+    const name = "เจ้าหญิงเจนนี่แห่งทุ่งหญ้าสีทองชื่อยาวเพื่อทดสอบ";
+    renderer.act(() => { tree = renderer.create(React.createElement(BuffaloCard, {
+      buffalo: { ...buffalo, sex, name, ageMonths: null }, onPress: jest.fn(),
+    })); });
+    expect(tree.root.findByProps({ accessibilityLabel: accessibleLabel })).toBeDefined();
+    const title = tree.root.findByProps({ children: name });
+    expect(title.props.numberOfLines).toBe(2);
+    expect(StyleSheet.flatten(title.props.style)).toMatchObject({ fontSize: 15, minWidth: 0, flex: 1 });
+    expect(JSON.stringify(tree.toJSON())).toContain(label);
+    const footer = tree.root.findByProps({ testID: "card-photo-footer" });
+    expect(StyleSheet.flatten(footer.props.style)).toMatchObject({ height: 44 });
+    expect(footer.findByProps({ children: "น้อยกว่าหนึ่งเดือน" })).toBeDefined();
+    const frame = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.aspectRatio === 3 / 2)!;
+    expect(frame.findAll((node) => node.props.children === "น้อยกว่าหนึ่งเดือน")).toHaveLength(0);
+    const serialized = JSON.stringify(tree.toJSON());
+    expect(serialized.indexOf("card-photo-footer")).toBeGreaterThan(serialized.indexOf(buffalo.microchip));
+    const before = footer.props.style;
+    renderer.act(() => tree.root.findByType(Image).props.onError());
+    expect(tree.root.findByProps({ testID: "card-photo-footer" }).props.style).toEqual(before);
+  });
+
+  it("normalizes only canonical source sex values identically to Web", () => {
+    for (const value of ["male", " Male ", "MALE"]) expect(buffaloSex(value)).toEqual({ symbol: "♂", label: "ผู้", accessibleLabel: "เพศผู้" });
+    for (const value of ["female", " FEMALE "]) expect(buffaloSex(value)).toEqual({ symbol: "♀", label: "เมีย", accessibleLabel: "เพศเมีย" });
+    for (const value of [null, undefined, "", " ", "m", "f", "ชาย", "เมีย", "unknown", 1, {}]) expect(buffaloSex(value)).toEqual({ symbol: "", label: "ไม่ระบุ", accessibleLabel: "ไม่ระบุเพศ" });
+  });
+
+  it("uses one responsive policy and stable footer extent without shrinking fonts", () => {
+    for (const width of [320, 360]) expect(buffaloCardColumns(width, 1)).toBe(1);
+    for (const width of [375, 390, 430, 768]) expect(buffaloCardColumns(width, 1)).toBe(2);
+    for (const width of [320, 390, 768]) expect(buffaloCardColumns(width, 1.3)).toBe(1);
+    expect(buffaloCardFooterHeight(1)).toBe(44);
+    expect(buffaloCardFooterHeight(1.5)).toBe(66);
+    expect(buffaloCardFooterHeight(2)).toBe(88);
+    renderer.act(() => { tree = renderer.create(React.createElement(BuffaloCard, { buffalo, onPress: jest.fn() })); });
+    renderer.act(() => Dimensions.set({ window: { width: 390, height: 844, scale: 1, fontScale: 2 } }));
+    const footer = tree.root.findByProps({ testID: "card-photo-footer" });
+    expect(StyleSheet.flatten(footer.props.style)?.height).toBe(88);
+    const card = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.borderColor === colors.photoHairline)!;
+    expect(StyleSheet.flatten(card.props.style)?.flexBasis).toBe("100%");
+  });
+
+  it("card footer error keeps uncapped full copy, stable Image, local retry and no fetch", () => {
+    const onPress = jest.fn();
+    const fetch = jest.spyOn(globalThis, "fetch");
+    const render = (uri: string, chip = buffalo.microchip) => React.createElement(BuffaloCard, { buffalo: { ...buffalo, ageMonths: null, microchip: chip }, onPress, photo: { uri, retry: 0 } });
+    renderer.act(() => { tree = renderer.create(render(source)); });
+    renderer.act(() => tree.root.findByType(Image).props.onLoad());
+    const good = tree.root.findByType(Image);
+    const footer = () => tree.root.findByProps({ testID: "card-photo-footer" });
+    const height = StyleSheet.flatten(footer().props.style)?.height;
+    renderer.act(() => tree.update(render(`${source}?candidate=b`)));
+    expect(StyleSheet.flatten(footer().props.style)?.height).toBe(height);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    const copy = footer().findByProps({ children: "อัปเดตไม่ได้" });
+    expect(footer().findByProps({ children: "น้อยกว่าหนึ่งเดือน" })).toBeDefined();
+    expect(copy.props.numberOfLines).toBeUndefined();
+    expect(copy.props.maxFontSizeMultiplier).toBeUndefined();
+    expect(tree.root.findByType(Image)).toBe(good);
+    renderer.act(() => Dimensions.set({ window: { width: 390, height: 844, scale: 1, fontScale: 2 } }));
+    expect(StyleSheet.flatten(footer().props.style)?.height).toBe(88);
+    expect(footer().findByProps({ children: "น้อยกว่าหนึ่งเดือน" })).toBeDefined();
+    expect(footer().findByProps({ children: "อัปเดตไม่ได้" }).props.numberOfLines).toBeUndefined();
+    expect(StyleSheet.flatten(footer().findByProps({ accessibilityLabel: "ลองโหลดภาพ ฟ้าประทาน อีกครั้ง" }).props.style)).toMatchObject({ minHeight: 44, minWidth: 44 });
+    const stopped = jest.fn();
+    renderer.act(() => footer().findByProps({ accessibilityLabel: "ลองโหลดภาพ ฟ้าประทาน อีกครั้ง" }).props.onPress({ stopPropagation: stopped }));
+    expect(stopped).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onLoad());
+    const accepted = tree.root.findByType(Image);
+    renderer.act(() => tree.update(render(`${source}?candidate=b`)));
+    expect(tree.root.findByType(Image)).toBe(accepted);
+    renderer.act(() => tree.update(render(source, "764040226600002")));
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
+    expect(tree.root.findByType(Image)).not.toBe(accepted);
+    expect(footer().findAll((node) => node.props.children === "อัปเดตไม่ได้")).toHaveLength(0);
   });
 });

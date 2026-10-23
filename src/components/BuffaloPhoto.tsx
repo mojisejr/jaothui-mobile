@@ -21,8 +21,13 @@ export function BuffaloPhotoFeedback({ children }: { children?: ReactNode }) {
   return <FeedbackReport.Provider value={setFeedback}><FeedbackState.Provider value={feedback}><View>{children}</View></FeedbackState.Provider></FeedbackReport.Provider>;
 }
 
-export function BuffaloPhotoStatus() {
+export function BuffaloPhotoStatus({ leading, footerHeight = spacing.touchTarget }: { leading?: ReactNode; footerHeight?: number }) {
   const feedback = useContext(FeedbackState);
+  if (leading) return <View testID="card-photo-footer" style={[styles.cardStatusSlot, { height: footerHeight }]}>
+    <View style={styles.cardLeading}>{leading}</View>
+    <View style={styles.cardFeedbackSlot}>{feedback?.hasGood && (feedback.pending || feedback.failed)
+      ? <PhotoFeedback feedback={feedback} compact card /> : null}</View>
+  </View>;
   return <View style={styles.statusSlot}>{feedback?.hasGood && (feedback.pending || feedback.failed)
     ? <PhotoFeedback feedback={feedback} compact /> : null}</View>;
 }
@@ -105,15 +110,15 @@ function PhotoSource({ uri, label, retry = 0 }: BuffaloPhotoProps) {
   );
 }
 
-function PhotoFeedback({ feedback, compact = false }: { feedback: Feedback; compact?: boolean }) {
+function PhotoFeedback({ feedback, compact = false, card = false }: { feedback: Feedback; compact?: boolean; card?: boolean }) {
   const { pending, hasGood, label, retry, reduceMotion } = feedback;
-  const copy = pending ? (hasGood ? "กำลังอัปเดตภาพ…" : "กำลังโหลดภาพ…")
-    : (hasGood ? "อัปเดตภาพไม่สำเร็จ" : "โหลดภาพไม่สำเร็จ");
+  const copy = pending ? (hasGood ? (card ? "อัปเดตภาพ…" : "กำลังอัปเดตภาพ…") : "กำลังโหลดภาพ…")
+    : (hasGood ? (card ? "อัปเดตไม่ได้" : "อัปเดตภาพไม่สำเร็จ") : "โหลดภาพไม่สำเร็จ");
   return <View style={compact ? styles.compactFeedback : styles.feedback}>
     <View style={styles.feedbackMessage} accessible accessibilityLabel={`${copy} ${label}`} accessibilityState={{ busy: pending }}>
       {pending ? (reduceMotion ? <Text style={styles.staticIndicator} accessible={false}>◌</Text>
         : <ActivityIndicator size="small" color={colors.gold} accessible={false} />) : null}
-      <Text style={styles.feedbackText} numberOfLines={compact ? 2 : undefined} maxFontSizeMultiplier={compact ? 1.5 : undefined}>{copy}</Text>
+      <Text style={styles.feedbackText} numberOfLines={compact && !card ? 2 : undefined} maxFontSizeMultiplier={compact && !card ? 1.5 : undefined}>{copy}</Text>
     </View>
     {!pending ? <Pressable accessibilityRole="button" accessibilityLabel={`ลองโหลดภาพ ${label} อีกครั้ง`}
       style={styles.retry} onPress={(event) => { event.stopPropagation(); retry(); }}>
@@ -180,6 +185,9 @@ const styles = StyleSheet.create({
   candidate: { ...StyleSheet.absoluteFillObject, opacity: 0 },
   emptyFeedback: { ...StyleSheet.absoluteFillObject, padding: spacing.xxs, justifyContent: "center", alignItems: "center", zIndex: 1 },
   statusSlot: { height: spacing.touchTarget, paddingHorizontal: spacing.xs },
+  cardStatusSlot: { minWidth: 0, flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  cardLeading: { maxWidth: "35%", minWidth: 0, flexShrink: 0 },
+  cardFeedbackSlot: { minWidth: 0, flex: 1, alignSelf: "stretch" },
   compactFeedback: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.xxs },
   feedback: { alignItems: "center", gap: spacing.xxs, maxWidth: "100%" },
   feedbackMessage: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: spacing.xxs },

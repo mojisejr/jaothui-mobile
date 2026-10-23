@@ -1,9 +1,10 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { getBuffalos } from "@/api/jaothui";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
+import { buffaloCardColumns } from "@/components/buffaloCardLayout";
 import { StateBlock } from "@/components/StateBlock";
 import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
 import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
@@ -31,6 +32,8 @@ const MICROCHIP_PATTERN = /^\d{12,}$/;
 
 export function BuffaloListScreen() {
   const router = useRouter();
+  const { width, fontScale } = useWindowDimensions();
+  const columns = buffaloCardColumns(width, fontScale);
   const [page, setPage] = useState(1);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
@@ -115,13 +118,14 @@ export function BuffaloListScreen() {
   return (
     <AppShell activeTab="buffalo" scroll={false}>
       <FlatList
+        key={`buffalo-columns-${columns}`}
         data={listData}
         refreshing={photos.refreshing}
         onRefresh={photos.refresh}
         keyExtractor={keyExtractor}
         renderItem={renderBuffalo}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
+        numColumns={columns}
+        columnWrapperStyle={columns === 2 ? styles.row : undefined}
         contentContainerStyle={styles.content}
         initialNumToRender={6}
         maxToRenderPerBatch={6}

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { getHome, getNewsEvents } from "@/api/jaothui";
 import { BuffaloCard } from "@/components/BuffaloCard";
+import { buffaloCardColumns, buffaloCardFooterHeight } from "@/components/buffaloCardLayout";
 import { Screen } from "@/components/Screen";
 import { Skeleton } from "@/components/Skeleton";
 import { StateBlock } from "@/components/StateBlock";
@@ -156,6 +157,7 @@ export function HomeScreen() {
 }
 
 function HomeSkeleton() {
+  const { width, fontScale } = useWindowDimensions();
   return (
     <>
       <View style={styles.skeletonStats}>
@@ -172,13 +174,13 @@ function HomeSkeleton() {
       </View>
       <View style={styles.featuredGrid}>
         {Array.from({ length: 4 }).map((_, index) => (
-          <View key={index} style={styles.skeletonFeatureCard}>
+          <View key={index} style={[styles.skeletonFeatureCard, buffaloCardColumns(width, fontScale) === 1 && { flexBasis: "100%" }]}>
             <Skeleton variant="image" style={styles.skeletonFeatureImage} />
             <View style={styles.skeletonFeatureBody}>
               <Skeleton style={styles.skeletonFeatureName} />
               <Skeleton style={styles.skeletonFeatureMeta} />
               <Skeleton style={styles.skeletonFeatureMeta} />
-              <Skeleton style={styles.skeletonFeatureAge} />
+              <View style={{ height: buffaloCardFooterHeight(fontScale), justifyContent: "center" }}><Skeleton style={styles.skeletonFeatureAge} /></View>
             </View>
           </View>
         ))}
