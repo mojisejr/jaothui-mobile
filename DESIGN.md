@@ -426,7 +426,11 @@ The stutter gate is binding:
   successful URI keeps its Image node, while a later photo check can retry an earlier failure. Changing
   buffalo identity clears the prior bitmap immediately. Slow loads keep the same frame.
 - Cards use a shrinkable 45% basis with grow/shrink and zero minimum width to keep two-column phone
-  grids in bounds. Preserve memoization, stable keys and FlatList virtualization; no per-image size requests.
+  grids in bounds. A one-column vertical FlatList passes `layout="list"`: its card uses width100%,
+  auto flex basis and zero grow/shrink so height follows image/body content, not the cell's vertical
+  percentage basis. Home/owned row grids keep their original percentage sizing; two-column list rows
+  retain the same grid policy. Preserve clipping, memoization, stable keys and FlatList virtualization;
+  no per-image size requests or scroll-driven sizing/data updates.
 - News, decorative heroes, avatars and certificate-document images retain their independent policies.
 - Run `bun run test:buffalo-photo` for mounted native fallback/layout and geometry/mutant contracts.
   These are deterministic checks, not installed iOS/Android visual or physical-scroll proof.
