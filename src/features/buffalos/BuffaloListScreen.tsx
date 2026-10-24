@@ -98,6 +98,7 @@ export function BuffaloListScreen() {
     ({ item }: { item: MobileBuffaloCard }) => (
       <BuffaloCard
         buffalo={item}
+        layout="list"
         photo={photos.photos.get(item.microchip)}
         onPress={() => {
           if (!MICROCHIP_PATTERN.test(item.microchip)) return;
