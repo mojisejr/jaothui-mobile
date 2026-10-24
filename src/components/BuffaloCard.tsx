@@ -11,13 +11,16 @@ type BuffaloCardProps = {
   buffalo: MobileBuffaloCard;
   onPress: () => void;
   photo?: { uri: string | null; retry: number };
+  /** A one-column FlatList cell owns width; row grids keep percentage flex basis. */
+  layout?: "grid" | "list";
 };
 
-function BuffaloCardComponent({ buffalo, onPress, photo }: BuffaloCardProps) {
+function BuffaloCardComponent({ buffalo, onPress, photo, layout = "grid" }: BuffaloCardProps) {
   const { width, fontScale } = useWindowDimensions();
+  const singleColumn = buffaloCardColumns(width, fontScale) === 1;
   const sex = buffaloSex(buffalo.sex);
   return (
-    <Pressable style={[styles.card, buffaloCardColumns(width, fontScale) === 1 && styles.singleColumn]} onPress={onPress}>
+    <Pressable style={[styles.card, singleColumn && (layout === "list" ? styles.listSingleColumn : styles.singleColumn)]} onPress={onPress}>
       <BuffaloPhotoFeedback key={buffalo.microchip}>
         <View style={styles.imageFrame}>
           <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={buffalo.name || "ไม่ทราบชื่อ"} />
@@ -66,6 +69,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   singleColumn: { flexBasis: "100%" },
+  listSingleColumn: { width: "100%", flexBasis: "auto", flexGrow: 0, flexShrink: 0 },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.xs, minWidth: 0 },
   sex: { flexDirection: "row", alignItems: "center", gap: spacing.xxs, flexShrink: 0 },
   sexText: { color: colors.muted, fontSize: 12, lineHeight: 20 },

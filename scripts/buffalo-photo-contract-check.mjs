@@ -64,7 +64,10 @@ function verify({ photo, card, detail, home }) {
     assert.doesNotMatch(ageStyle, /borderWidth|backgroundColor|paddingHorizontal/);
   }
   assert.match(card, /memo\(BuffaloCardComponent\)/);
-  assert.match(card, /<Pressable style=\{\[styles\.card, buffaloCardColumns\(width, fontScale\) === 1 && styles\.singleColumn\]\} onPress=\{onPress\}/);
+  assert.match(card, /const singleColumn = buffaloCardColumns\(width, fontScale\) === 1/);
+  assert.match(card, /<Pressable style=\{\[styles\.card, singleColumn && \(layout === "list" \? styles\.listSingleColumn : styles\.singleColumn\)\]\} onPress=\{onPress\}/);
+  assert.match(card, /layout = "grid"/);
+  assert.match(card, /listSingleColumn: \{ width: "100%", flexBasis: "auto", flexGrow: 0, flexShrink: 0 \}/);
   const cardStyle = card.match(/card: \{([\s\S]*?)\n  \},/)?.[1];
   assert.ok(cardStyle);
   assert.match(cardStyle, /minWidth: 0/);
@@ -96,10 +99,18 @@ const mutants = [
   { ...sources, detail: sources.detail.replace("<BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl}", "<Image source={buffalo.imageUrl}") },
   { ...sources, home: sources.home.replace("minWidth: 0", "minWidth: 150") },
   { ...sources, home: sources.home.replace('flexBasis: "45%"', "flex: 1") },
+  { ...sources, card: sources.card.replace('layout === "list"', 'layout === "grid"') },
+  { ...sources, card: sources.card.replace('flexBasis: "auto"', 'flexBasis: "100%"') },
+  { ...sources, card: sources.card.replace('flexGrow: 0, flexShrink: 0', 'flexGrow: 1, flexShrink: 1') },
 ];
 for (const [index, mutant] of mutants.entries()) assert.throws(() => verify(mutant), `Policy mutant ${index + 1} must be rejected`);
 const list = read("src/features/buffalos/BuffaloListScreen.tsx");
 for (const required of ["<FlatList", "keyExtractor={keyExtractor}", "numColumns={columns}", "key={`buffalo-columns-${columns}`}", "buffaloCardColumns(width, fontScale)", "initialNumToRender={6}", "maxToRenderPerBatch={6}", "windowSize={5}"]) assert.ok(list.includes(required));
+assert.match(list, /<BuffaloCard\s+buffalo=\{item\}\s+layout="list"/);
+assert.match(list, /\n        removeClippedSubviews\n/);
+for (const path of ["src/features/home/HomeScreen.tsx", "src/features/profile/ProfileShell.tsx"]) {
+  for (const card of elements(read(path), "BuffaloCard")) assert.doesNotMatch(card, /layout="list"/);
+}
 for (const path of ["src/features/home/HomeScreen.tsx", "src/features/buffalos/BuffaloListScreen.tsx", "src/features/profile/ProfileShell.tsx"]) assert.match(read(path), /<BuffaloCard/);
 assert.match(read("src/features/home/NewsEventRail.tsx"), /uri: item\.coverImageUrl[^\n]*resizeMode="cover"/);
 assert.match(read("src/features/profile/ProfileShell.tsx"), /uri: avatarUrl[^\n]*resizeMode="cover"/);
