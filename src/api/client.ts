@@ -47,7 +47,7 @@ function buildHeaders(options: MobileRequestOptions) {
     "Cache-Control": "no-cache",
   };
 
-  if (options.method === "POST") {
+  if (options.method === "POST" || (options.method === "DELETE" && options.body !== undefined)) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -67,7 +67,7 @@ export async function mobileRequest<T>(
     method,
     cache: "no-store",
     headers: buildHeaders({ ...options, method }),
-    body: method === "POST" ? JSON.stringify(options.body ?? {}) : undefined,
+    body: method === "POST" || (method === "DELETE" && options.body !== undefined) ? JSON.stringify(options.body ?? {}) : undefined,
     ...(options.signal ? { signal: options.signal } : {}),
   });
   let payload: MobileResponse<T>;

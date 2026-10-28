@@ -13,6 +13,7 @@ import { StatCard, StatGlyphRuler } from "@/components/StatCard";
 import { bottomNav, colors, radius, shadow, spacing, typography } from "@/design/tokens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { HomeEventZone } from "../events/HomeEventZone";
 import { NewsEventRail } from "./NewsEventRail";
 import { createStatPresentation, statsIntersectViewport, type GlyphMetrics } from "./countUp";
 import { useStatEnvironment } from "./useStatEnvironment";
@@ -36,12 +37,16 @@ export function HomeScreen() {
   const onGlyphMetrics = useCallback((metrics: GlyphMetrics) => setMeasurement((previous) =>
     previous?.fontScale === fontScale && previous.metrics.digit === metrics.digit && previous.metrics.comma === metrics.comma
       ? previous : { fontScale, metrics }), [fontScale]);
+  const eventLayout = useRef<{ y: number; height: number } | null>(null);
+  const [eventVisible, setEventVisible] = useState(false);
   const statsLayout = useRef<{ y: number; height: number } | null>(null);
   const viewport = useRef({ offset: 0, height: 0 });
   const [visible, setVisible] = useState<boolean | null>(null);
   const refreshVisibility = useCallback(() => {
     const next = statsIntersectViewport(statsLayout.current, viewport.current);
     setVisible((previous) => previous === next ? previous : next);
+    const nextEvent = statsIntersectViewport(eventLayout.current, viewport.current) === true;
+    setEventVisible(previous => previous === nextEvent ? previous : nextEvent);
   }, []);
   const newsEventsState = useAsyncResource(loadNewsEvents);
   const heroSubtitle =
@@ -89,6 +94,11 @@ export function HomeScreen() {
         </View>
       </ImageBackground>
 
+      <HomeEventZone visible={eventVisible} onLayout={event => {
+        eventLayout.current = { y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height };
+        refreshVisibility();
+      }} />
+
       {state.status === "loading" ? (
         <HomeSkeleton />
       ) : null}
@@ -104,11 +114,6 @@ export function HomeScreen() {
 
       {state.status === "success" ? (
         <>
-          <View style={styles.trustStrip}>
-            <Text style={styles.trustLabel}>PUBLIC PEDIGREE</Text>
-            <Text style={styles.trustText}>ข้อมูลจริงจากระบบ JAOTHUI สำหรับค้นหา ตรวจสอบ และดูใบรับรอง</Text>
-          </View>
-
           <View style={styles.statsGrid} onLayout={(event) => {
             const { y, height } = event.nativeEvent.layout;
             statsLayout.current = { y, height };

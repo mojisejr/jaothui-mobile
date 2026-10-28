@@ -14,7 +14,7 @@ export function StateBlock({ title, message, actionLabel, onAction }: StateBlock
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {actionLabel && onAction ? (
-        <Pressable style={styles.button} onPress={onAction}>
+        <Pressable accessibilityRole="button" style={styles.button} onPress={onAction}>
           <Text style={styles.buttonText}>{actionLabel}</Text>
         </Pressable>
       ) : null}
