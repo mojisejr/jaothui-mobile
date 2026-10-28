@@ -86,10 +86,20 @@ describe("persisted event OAuth coordinator", () => {
     const h = harness(), { intent } = await h.coordinator.begin("login", "event-a");
     const set = h.storage.setItemAsync.getMockImplementation()!;
     h.storage.setItemAsync.mockImplementation(async (key, value) => { if (key === "jaothui.mobileSession.v1") throw new Error("disk full"); await set(key, value); });
-    await expect(h.coordinator.complete(callback(intent.flowId))).rejects.toThrow("disk full");
+    await expect(h.coordinator.complete(callback(intent.flowId))).rejects.toMatchObject({ name: "MobileSessionStorageError", cause: expect.objectContaining({ message: "disk full" }) });
     expect((await readOAuthIntent(h.storage))?.status).toBe("completed");
     h.storage.setItemAsync.mockImplementation(set);
     expect((await createOAuthCompletion(h.deps).complete(callback(intent.flowId))).target).toBe("/events/event-a");
+  });
+  it("rejects a cold old intent after a new unrelated session saved but intent erase failed", async () => {
+    const h = harness(); await saveMobileSession(apple, h.storage);
+    const { intent, generation } = await h.coordinator.begin("link", "event-a"), serverId = "d".repeat(64);
+    await h.coordinator.bindServerIntent(intent, serverId, generation);
+    h.storage.deleteItemAsync.mockRejectedValueOnce(new Error("native intent delete failed"));
+    await expect(saveMobileSession(line, h.storage)).rejects.toMatchObject({ name: "MobileSessionStorageError" });
+    expect((await readOAuthIntent(h.storage))?.flowId).toBe(intent.flowId);
+    await expect(createOAuthCompletion(h.deps).complete(callback(undefined, `purpose=link&intentId=${serverId}&handoff=opaque`))).rejects.toThrow("บัญชีเปลี่ยน");
+    expect(h.deps.redeemLink).not.toHaveBeenCalled(); expect(await loadMobileSession(h.storage)).toEqual(line);
   });
   it("separates true401 from service503 and intent409", async () => {
     const clear = jest.fn(async () => {});
