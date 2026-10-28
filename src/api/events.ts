@@ -1,5 +1,5 @@
 import { mobileGetWithAuth, mobilePostWithAuth, mobileRequest } from "./client";
-import type { EventDetail, EventList, EventMemberResult, EventQuery, EventReturnIntent, LineLinkResult, LineLinkStart } from "@/types/events";
+import type { MemberEnrollment, RegistrationDetail, RegistrationHistory, RegistrationRequest, RegistrationResult, EventMember, EventDetail, EventList, EventMemberResult, EventQuery, EventReturnIntent, LineLinkResult, LineLinkStart } from "@/types/events";
 
 export function eventQueryString(query: EventQuery = {}) {
   const params = new URLSearchParams();
@@ -24,4 +24,24 @@ export function redeemEventLineLink(token: string, intentId: string, handoff: st
 }
 export function cancelEventLineLink(token: string, intentId: string) {
   return mobileRequest<{ cancelled: boolean }>("/api/mobile/v2/auth/line-link/start", { method: "DELETE", body: { intentId }, bearerToken: token });
+}
+
+export function enrollEventMember(token: string, fields: MemberEnrollment) {
+  return mobilePostWithAuth<{ member: EventMember; created: boolean }>("/api/mobile/v2/event-member", fields, token);
+}
+export function getEventRegistrations(token: string, cursor?: string) {
+  const params = new URLSearchParams({ limit: "20" });
+  if (cursor) params.set("cursor", cursor);
+  return mobileGetWithAuth<RegistrationHistory>(`/api/mobile/v2/event-registrations?${params}`, token);
+}
+export function getEventRegistration(token: string, id: string) {
+  return mobileGetWithAuth<RegistrationDetail>(`/api/mobile/v2/event-registrations/${encodeURIComponent(id)}`, token);
+}
+export function submitEventRegistration(token: string, eventId: string, payload: RegistrationRequest) {
+  return mobilePostWithAuth<RegistrationResult>(`/api/mobile/v2/events/${encodeURIComponent(eventId)}/registrations`, payload, token);
+}
+export function uploadEventImage(token: string, eventId: string, bytes: Uint8Array) {
+  return mobileRequest<{ assetId: string }>(`/api/mobile/v2/events/${encodeURIComponent(eventId)}/images`, {
+    method: "POST", bearerToken: token, contentType: "image/jpeg", rawBody: new Uint8Array(bytes).buffer,
+  });
 }

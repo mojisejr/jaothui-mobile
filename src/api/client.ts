@@ -25,6 +25,8 @@ export const API_BASE_URL = resolveApiBaseUrl(
 type MobileRequestOptions = {
   method?: "DELETE" | "GET" | "POST";
   body?: unknown;
+  rawBody?: ArrayBuffer;
+  contentType?: string;
   bearerToken?: string | null;
   signal?: AbortSignal;
 };
@@ -48,7 +50,7 @@ function buildHeaders(options: MobileRequestOptions) {
   };
 
   if (options.method === "POST" || (options.method === "DELETE" && options.body !== undefined)) {
-    headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = options.contentType ?? "application/json";
   }
 
   if (options.bearerToken) {
@@ -67,7 +69,7 @@ export async function mobileRequest<T>(
     method,
     cache: "no-store",
     headers: buildHeaders({ ...options, method }),
-    body: method === "POST" || (method === "DELETE" && options.body !== undefined) ? JSON.stringify(options.body ?? {}) : undefined,
+    body: options.rawBody ?? (method === "POST" || (method === "DELETE" && options.body !== undefined) ? JSON.stringify(options.body ?? {}) : undefined),
     ...(options.signal ? { signal: options.signal } : {}),
   });
   let payload: MobileResponse<T>;

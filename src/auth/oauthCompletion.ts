@@ -84,7 +84,7 @@ export function createOAuthCompletion(deps: Dependencies) {
         if (!current || current.identity.sessionVersion !== 2 || current.identity.provider === "reviewer") throw new Error("ไม่พบบัญชีเดิมสำหรับเชื่อมต่อ");
         const result = await deps.redeemLink(current.sessionToken, intent.serverIntentId!, handoff);
         if (result.identity.provider === "reviewer" || result.identity.accountId !== current.identity.accountId || result.identity.provider !== current.identity.provider || result.identity.providerUserId !== current.identity.providerUserId) throw new Error("บัญชีที่ส่งกลับมาไม่ตรงกับบัญชีเดิม");
-        if (intent.eventId && (result.returnIntent.kind !== "event-apply" || result.returnIntent.eventId !== intent.eventId)) throw new Error("กิจกรรมที่ส่งกลับมาไม่ตรงกัน");
+        if (intent.eventId ? (result.returnIntent.kind !== "event-apply" || result.returnIntent.eventId !== intent.eventId) : result.returnIntent.kind !== "profile-link") throw new Error("กิจกรรมที่ส่งกลับมาไม่ตรงกัน");
         session = result;
       } else {
         const result = await deps.redeemLogin(handoff, intent.flowId);

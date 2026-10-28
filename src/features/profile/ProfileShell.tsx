@@ -609,6 +609,7 @@ function ConnectedProfile({
   reviewerFixtureBusy: boolean;
   reviewerFixtureLinked: boolean;
 }) {
+  const router = useRouter();
   const ownedBuffalos = useMemo(() => getOwnedBuffaloPreview(profile), [profile]);
   const photos = usePhotoFreshness(ownedBuffalos);
   const displayName = getProfileDisplayName(profile);
@@ -680,6 +681,10 @@ function ConnectedProfile({
           </>
         )}
       </View>
+
+      {profile.identity.provider === "line" || profile.identity.provider === "apple" ? (
+        <View style={styles.card}><Text style={styles.sectionTitle}>กิจกรรมประกวด</Text><SettingsRow label="ประวัติการสมัครประกวด" right="ดูใบสมัคร →" disabled={false} disabledCaption={null} onPress={() => router.push("/registrations")} /></View>
+      ) : null}
 
       {isReviewer ? (
         <View style={styles.reviewerFixtureCard}>
