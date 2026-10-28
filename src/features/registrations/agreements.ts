@@ -1,5 +1,7 @@
 // Source: jaothui-event@914da59ff9cbf287da8a5fb00276bef59f7604af Formv3.tsx / RoyalForm.tsx.
-// Preserve source consent wording, including Royal event dates; do not invent new terms.
+// Preserve source consent wording except Royal accept5/accept6: owner-approved mobile-only
+// replacements on 2026-10-28 reference the organizer's published timetable instead of historical Jan 2569 dates.
+// Event/BFF source remains unchanged; all 12 Royal clauses still require explicit positive consent.
 export const eventAgreements = {
   "normal": [
     {
@@ -50,11 +52,11 @@ export const eventAgreements = {
     },
     {
       "key": "accept5",
-      "text": "5. กระบือเผือก เข้ายืนยันตัวตนพร้อมกระบือ ที่สนามประกวดวันที่ 10 มกราคม 2569 ตั้งแต่ เวลา 05.30 น. - 10.00 น. และเริ่มการประกวด วันที่ 11 มกราคม 2569 เวลา 8.00 น."
+      "text": "5. กระบือเผือกต้องยืนยันตัวตนพร้อมกระบือ และเข้าประกวดตามวันและเวลาที่ผู้จัดประกาศในรายละเอียดงาน"
     },
     {
       "key": "accept6",
-      "text": "6. กระบือดำ เข้ายืนยันตัวตนพร้อมกระบือ ที่สนามประกวดวันที่ 11 มกราคม 2569 ตั้งแต่ เวลา 05.30 น. - 10.00 น. และเริ่มการประกวด วันที่ 12 มกราคม 2569 เวลา 8.00 น."
+      "text": "6. กระบือดำต้องยืนยันตัวตนพร้อมกระบือ และเข้าประกวดตามวันและเวลาที่ผู้จัดประกาศในรายละเอียดงาน"
     },
     {
       "key": "accept7",

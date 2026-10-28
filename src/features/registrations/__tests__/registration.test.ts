@@ -21,6 +21,11 @@ describe("source registration payload and consent", () => {
     const request = buildRegistrationRequest(royalEvent, filledFields, consent(true), photoIds, uuid);
     expect(Object.keys(request.agreements)).toEqual(["d1Accept", "d2Accept", "d3Accept", ...Array.from({ length: 9 }, (_, i) => `accept${i + 1}`)]);
     expect(agreementsFor(royalEvent).at(-1)?.text).toBe("9. ผู้สมัครรับรองความถูกต้องของข้อมูลนี้ และให้มีผลสมบูรณ์ตามกฎหมายทุกประการ");
+    const clauses = agreementsFor(royalEvent);
+    expect(clauses).toHaveLength(12);
+    expect(clauses.find(clause => clause.key === "accept5")?.text).toBe("5. กระบือเผือกต้องยืนยันตัวตนพร้อมกระบือ และเข้าประกวดตามวันและเวลาที่ผู้จัดประกาศในรายละเอียดงาน");
+    expect(clauses.find(clause => clause.key === "accept6")?.text).toBe("6. กระบือดำต้องยืนยันตัวตนพร้อมกระบือ และเข้าประกวดตามวันและเวลาที่ผู้จัดประกาศในรายละเอียดงาน");
+    expect(clauses.map(clause => clause.text).join(" ")).not.toMatch(/มกราคม 2569|05\.30|10\.00|8\.00/);
     for (const key of Object.keys(request.agreements)) expect(() => buildRegistrationRequest(royalEvent, filledFields, { ...consent(true), [key]: false }, photoIds, uuid)).toThrow("ข้อตกลง");
     expect(() => buildRegistrationRequest(royalEvent, filledFields, consent(true), Array(5).fill(photoIds[0]), uuid)).toThrow("5 ภาพ");
     expect(() => buildRegistrationRequest(royalEvent, { ...filledFields, address: "" }, consent(true), photoIds, uuid)).toThrow("ที่อยู่");
