@@ -1,11 +1,18 @@
-import { Modal, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
+import { useState } from "react";
+import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
 import { colors, radius, spacing, typography } from "@/design/tokens";
 import { EventButton } from "@/features/events/EventControls";
 export function FormField({ label, value, onChange, disabled, hint, keyboardType = "default", multiline = false, maxLength = 300 }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; hint?: string; keyboardType?: KeyboardTypeOptions; multiline?: boolean; maxLength?: number }) {
   return <View style={formStyles.field}><Text style={formStyles.label}>{label}</Text>{hint ? <Text style={formStyles.hint}>{hint}</Text> : null}<TextInput accessibilityLabel={label} value={value} onChangeText={onChange} editable={!disabled} placeholderTextColor={colors.muted} keyboardType={keyboardType} autoCorrect={false} autoCapitalize={keyboardType === "email-address" ? "none" : "sentences"} multiline={multiline} maxLength={maxLength} style={[formStyles.input, multiline && { minHeight: 88 }]} /></View>;
 }
-export function FormChoice({ label, selected, onPress, disabled = false }: { label: string; selected: boolean; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress} style={[formStyles.choice, selected && formStyles.chosen, disabled && { opacity: 0.5 }]}><Text style={[formStyles.choiceLabel, selected && { color: colors.background }]}>{label}</Text></Pressable>;
+export function FormChoice({ label, accessibilityLabel = label, selected, onPress, disabled = false }: { label: string; accessibilityLabel?: string; selected: boolean; onPress: () => void; disabled?: boolean }) {
+  return <Pressable accessibilityRole="radio" accessibilityLabel={accessibilityLabel} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress} style={[formStyles.choice, selected && formStyles.chosen, disabled && { opacity: 0.5 }]}><Text style={[formStyles.choiceLabel, selected && { color: colors.background }]}>{label}</Text></Pressable>;
+}
+export function FormSelect({ label, value, options, onChange, disabled = false, emptyLabel }: { label: string; value: string; options: string[]; emptyLabel?: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <View style={formStyles.field}><Text style={formStyles.label}>{label}</Text><Pressable accessibilityRole="button" accessibilityLabel={`เลือก${label}`} accessibilityState={{ disabled }} disabled={disabled} onPress={() => setOpen(true)} style={formStyles.input}><Text style={formStyles.body}>{value || emptyLabel || label} ▾</Text></Pressable>
+    <Modal visible={open && !disabled} transparent animationType="none" onRequestClose={() => setOpen(false)}><View style={formStyles.modal}><View accessibilityViewIsModal style={[formStyles.dialog, { maxHeight: "80%" }]}><Text style={formStyles.section}>เลือก{label}</Text><FlatList data={options} keyExtractor={item => item} renderItem={({ item }) => <Pressable accessibilityRole="radio" accessibilityLabel={item || emptyLabel || label} accessibilityState={{ checked: value === item }} style={formStyles.input} onPress={() => { if (!disabled) onChange(item); setOpen(false); }}><Text style={formStyles.body}>{item || emptyLabel || label}</Text></Pressable>} /><EventButton secondary label="ยกเลิก" onPress={() => setOpen(false)} /></View></View></Modal>
+  </View>;
 }
 export function FormHeading({ title, subtitle }: { title: string; subtitle?: string }) {
   return <View style={formStyles.heading}><Text style={formStyles.section}>{title}</Text>{subtitle ? <Text style={formStyles.hint}>{subtitle}</Text> : null}</View>;

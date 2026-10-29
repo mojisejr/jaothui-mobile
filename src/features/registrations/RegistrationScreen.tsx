@@ -2,8 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { randomUUID } from "expo-crypto";
-import { getEventDetail, getEventMember, enrollEventMember, submitEventRegistration, uploadEventImage } from "@/api/events";
-import { getCertDetail } from "@/api/jaothui";
+import { getEventDetail, getEventMember, enrollEventMember, submitEventRegistration, uploadEventImage, getRegistrationBuffalo } from "@/api/events";
 import { MobileApiError } from "@/api/client";
 import type { EventDetail, EventMember } from "@/types/events";
 import { Screen } from "@/components/Screen";
@@ -14,7 +13,7 @@ import { validEventId } from "@/auth/oauthIntentStorage";
 import { recoverRejectedMobileSession } from "@/features/profile/sessionRecovery";
 import { eventDraft, discardEventDraft, type EventDraft } from "./drafts";
 import { sameCustomer, eventAccountError, type CustomerSession } from "./customer";
-import { validateMember, buildRegistrationRequest, reconcileClasses } from "./model";
+import { validateMember, buildRegistrationRequest, reconcileClasses, migrateOwnerFields } from "./model";
 import { eventPrivateRequest } from "./privateRequest";
 import { createBuffaloLookup } from "./lookup";
 import { createSubmission } from "./submission";
@@ -45,7 +44,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       const draft = eventDraft(session.identity.accountId, eventId);
       if (!draft.fields.ownerTel && membership.member?.tel) draft.fields.ownerTel = membership.member.tel;
       if (!event.catalogs.some(c => c.level === draft.fields.level) && event.catalogs[0]) draft.fields.level = event.catalogs[0].level;
-      if (!draft.pending) draft.fields = reconcileClasses(event, draft.fields);
+      if (!draft.pending) draft.fields = reconcileClasses(event, migrateOwnerFields(draft.fields));
       const ready = { session, event, member: membership.member, draft }; current.current = ready; setData(ready);
     })().catch(failure => { if (active.current && request === epoch.current) setError(failure); });
   }, [eventId]);
@@ -64,7 +63,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       if (!await isCurrent(d)) throw new Error("บัญชีเปลี่ยนแล้ว กรุณากลับไปตรวจสอบบัญชีก่อน");
       return result;
     }, () => { d.draft.pending = submission.pending; if (active.current && current.current === d) refreshUI(); }, d.draft.pending && { ...d.draft.pending, state: d.draft.pending.state === "sending" ? "uncertain" : d.draft.pending.state });
-    const lookup = createBuffaloLookup({ fields: () => d.draft.fields, read: getCertDetail, current: () => isCurrent(d),
+    const lookup = createBuffaloLookup({ fields: () => d.draft.fields, read: microchip => getRegistrationBuffalo(d.session.sessionToken, microchip), current: () => isCurrent(d),
       apply: fields => { if (d.draft.pending || lock.current) return; d.draft.fields = reconcileClasses(d.event, fields, d.draft.fields); d.draft.dirty = true; refreshUI(); },
       state: (working, message) => { if (active.current && current.current === d) { setLookupBusy(working); if (message !== null) setLookupMessage(message); } } });
     return { photos, submission, lookup };
@@ -92,7 +91,8 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       if (!await isCurrent(data)) throw new Error("บัญชีเปลี่ยนแล้ว กรุณาเริ่มใหม่");
       const result = await enrollEventMember(data.session.sessionToken, validated.value);
       if (!await isCurrent(data)) return;
-      data.draft.fields.ownerName ||= `${validated.value.firstName} ${validated.value.lastName}`;
+      data.draft.fields.firstName ||= validated.value.firstName;
+      data.draft.fields.lastName ||= validated.value.lastName;
       data.draft.fields.ownerTel ||= validated.value.tel;
       data.member = result.member; data.draft.dirty = false;
       router.replace({ pathname: "/events/[eventId]/register", params: { eventId } });

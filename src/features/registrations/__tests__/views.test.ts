@@ -4,6 +4,7 @@ import { FlatList, Modal, TextInput } from "react-native";
 import { RegistrationFormView, type RegistrationFormViewProps } from "../RegistrationFormView";
 import { RegistrationDetailView } from "../RegistrationDetailView";
 import { RegistrationHistoryView } from "../RegistrationHistoryView";
+import { FormSelect } from "../FormControls";
 import { ThaiBirthdayPicker } from "../ThaiBirthdayPicker";
 import { agreementsFor } from "../model";
 import { emptyPhotos, photoTitles } from "../photos";
@@ -30,8 +31,10 @@ describe("mounted source-derived forms and own history presentation", () => {
   it.each([false, true])("renders all sourceconsents unchecked with explicit positive choice (Royal=%s)", royal => {
     const p = props(royal); renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
     for (const clause of agreementsFor(p.event)) {
-      const checkbox = tree.root.findByProps({ accessibilityRole: "checkbox", accessibilityLabel: `ยินยอม: ${clause.text}` }); expect(checkbox.props.accessibilityState.checked).toBe(false);
+      const checkbox = tree.root.findByProps({ accessibilityRole: "radio", accessibilityLabel: `ยินยอม: ${clause.text}` }); expect(checkbox.props.accessibilityState.checked).toBe(false);
       renderer.act(() => checkbox.props.onPress()); expect(p.onAgreement).toHaveBeenCalledWith(clause.key, true);
+      const no = tree.root.findByProps({ accessibilityRole: "radio", accessibilityLabel: `ไม่ยินยอม: ${clause.text}` });
+      renderer.act(() => no.props.onPress()); expect(p.onAgreement).toHaveBeenCalledWith(clause.key, false);
     }
     expect(p.onSubmit).not.toHaveBeenCalled();
   });
@@ -42,6 +45,15 @@ describe("mounted source-derived forms and own history presentation", () => {
     expect(JSON.stringify(tree.toJSON())).toContain("อัปโหลดไม่สำเร็จ"); expect(tree.root.findAllByType(TextInput).every(node => node.props.editable === false)).toBe(true);
     expect(tree.root.findByProps({ accessibilityLabel: "ตรวจสอบคำขอเดิมอีกครั้ง" })).toBeDefined();
     for (let i = 1; i <= 5; i++) expect(tree.root.findByProps({ accessibilityLabel: `${i === 1 ? "เปลี่ยนภาพ" : "เลือกภาพ"} ${i}` })).toBeDefined();
+  });
+  it("Royal uses canonical address selectors, clearing stale children, and only combined eligible classes", () => {
+    const p = props(true); renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
+    const selects = tree.root.findAllByType(FormSelect);
+    const province = selects.find(node => (node.props as unknown as { label: string }).label === "จังหวัด")!;
+    (province.props as unknown as { onChange: (s: string) => void }).onChange("กระบี่");
+    expect(p.onChange).toHaveBeenCalledWith(expect.objectContaining({ province: "กระบี่", amphoe: "", district: "" }));
+    expect(JSON.stringify(tree.toJSON())).toContain("ตัวอย่างภาพประจำตัวสัตว์");
+    expect(JSON.stringify(tree.toJSON())).not.toContain("เลือกรุ่นเอง");
   });
   it("opens date options without typing, and cancel/Android Back preserve the committed draft", () => {
     const onChange = jest.fn();
@@ -60,7 +72,7 @@ describe("mounted source-derived forms and own history presentation", () => {
   });
   it("renders ended own history and distinct normal/pending/approved/rejected filters", () => {
     const items = (["registered", "pending", "approved", "rejected"] as const).map((status, i) => ({ ...registration, id: `history-${i}`, status }));
-    const p = { items, filter: "all" as const, onFilter: jest.fn(), onOpen: jest.fn(), onMore: jest.fn(), hasMore: false, loadingMore: false };
+    const p = { items, period: "all" as const, filter: "all" as const, onFilter: jest.fn(), onOpen: jest.fn(), onMore: jest.fn(), hasMore: false, loadingMore: false };
     renderer.act(() => { tree = renderer.create(React.createElement(RegistrationHistoryView, p)); }); expect(tree.root.findByType(FlatList).props.data).toHaveLength(4);
     renderer.act(() => tree.update(React.createElement(RegistrationHistoryView, { ...p, filter: "pending" }))); expect(tree.root.findByType(FlatList).props.data).toHaveLength(1);
     renderer.act(() => tree.update(React.createElement(RegistrationDetailView, { registration: { ...registration, status: "rejected", approvalComment: "กรุณาตรวจสอบเอกสาร" } }))); expect(JSON.stringify(tree.toJSON())).toContain("ไม่ผ่านการพิจารณา"); expect(JSON.stringify(tree.toJSON())).not.toContain("อยู่ระหว่างพิจารณา");

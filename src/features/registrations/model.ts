@@ -2,16 +2,22 @@ import type { EventDetail, MemberEnrollment, RegistrationRequest, RegistrationSt
 import { parseCalendarInput } from "@/features/events/model";
 import { classDisplayName, getEligibleCompetitionClasses, normalizeClassName, parseCompetitionClass } from "./competitionClasses";
 import { validBirthday } from "./birthday";
+import { getAmphoeFromProvince, getDistrictsFromAmphoe } from "./addressHelper";
 import { eventAgreements } from "./agreements";
 
 export type FormFields = {
-  ownerName: string; ownerTel: string; province: string; farmName: string; name: string; microchip: string;
+  firstName: string; lastName: string; ownerName: string; ownerTel: string; province: string; farmName: string; name: string; microchip: string;
   sex: "" | "male" | "female"; color: "" | "black" | "albino"; birthdayInput: string;
   classMode?: "auto" | "special" | "manual";
   fatherName: string; motherName: string; level: "จังหวัด" | "ประเทศ"; type: string;
   address: string; district: string; amphoe: string; zipcode: string;
 };
-export const emptyFields = (): FormFields => ({ ownerName: "", ownerTel: "", province: "", farmName: "", name: "", microchip: "", sex: "", color: "", birthdayInput: "", fatherName: "", motherName: "", level: "จังหวัด", type: "", address: "", district: "", amphoe: "", zipcode: "" });
+export const emptyFields = (): FormFields => ({ firstName: "", lastName: "", ownerName: "", ownerTel: "", province: "", farmName: "", name: "", microchip: "", sex: "", color: "", birthdayInput: "", fatherName: "", motherName: "", level: "จังหวัด", type: "", address: "", district: "", amphoe: "", zipcode: "" });
+export function migrateOwnerFields(fields: FormFields): FormFields {
+  if (fields.firstName !== undefined && fields.lastName !== undefined) return fields;
+  const [firstName = "", ...rest] = (fields.ownerName || "").trim().split(/\s+/);
+  return { ...fields, firstName, lastName: rest.join(" ") };
+}
 export const thaiDigits = (text: string) => text.replace(/[๐-๙]/g, d => String("๐๑๒๓๔๕๖๗๘๙".indexOf(d)));
 export function normalizePhone(text: string): string | null {
   let phone = thaiDigits(text).replace(/[\s()-]/g, "");
@@ -49,7 +55,7 @@ export function registrationAge(birth: string, cutoff: string | null, royal: boo
 }
 export function eligibleClasses(event: EventDetail, fields: FormFields) {
   const birth = parseCalendarInput(fields.birthdayInput).day;
-  if (!birth || !validBirthday(birth) || !fields.color || !fields.sex) return [];
+  if (!birth || !validBirthday(birth) || !fields.color) return [];
   try {
     const age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", fields.color);
     return getEligibleCompetitionClasses(age, event.catalogs.filter(c => c.level === fields.level).flatMap(c => c.labels));
@@ -69,17 +75,28 @@ export function automaticClass(event: EventDetail, fields: FormFields) {
   }
   return null;
 }
-export function reconcileClasses(event: EventDetail, fields: FormFields, previous?: FormFields): FormFields {
-  const changed = previous && ["microchip", "birthdayInput", "sex", "color"].some(key => fields[key as keyof FormFields] !== previous[key as keyof FormFields]);
-  const classMode = changed ? "auto" : fields.classMode ?? (catalogClass(event, fields, fields.type)?.kind === "special" ? "special" : "auto");
-  if (classMode === "auto") {
-    const match = automaticClass(event, fields);
-    return { ...fields, classMode, level: match?.level ?? fields.level, type: match?.type ?? "" };
-  }
-  const type = eligibleClasses(event, fields).includes(fields.type) && (classMode !== "special" || catalogClass(event, fields, fields.type)?.kind === "special") ? fields.type : "";
-  return { ...fields, classMode, type };
+export function specialChoices(event: EventDetail, fields: FormFields) {
+  return (["ประเทศ", "จังหวัด"] as const).flatMap(level => eligibleClasses(event, { ...fields, level })
+    .filter(type => catalogClass(event, { level }, type)?.kind === "special").map(type => ({ level, type })));
 }
-export function classDescription(event: EventDetail, fields: FormFields, label: string) {
+export function reconcileClasses(event: EventDetail, fields: FormFields, previous?: FormFields): FormFields {
+  // Web normal resets on chip/birthday; Royal recalculates only when its computed age changes.
+  const age = (f: FormFields) => { try { return registrationAge(parseCalendarInput(f.birthdayInput).day!, event.ageCutoffDay, event.formKind === "royal", f.color); } catch { return null; } };
+  const changed = previous && (event.formKind === "royal" ? age(fields) !== age(previous) : fields.microchip !== previous.microchip || fields.birthdayInput !== previous.birthdayInput);
+  let classMode = changed || fields.classMode === "manual" ? "auto" : fields.classMode ?? (catalogClass(event, fields, fields.type)?.kind === "special" ? "special" : "auto");
+  const specials = specialChoices(event, fields);
+  if (classMode === "special") {
+    const entering = previous?.classMode !== "special" && fields.type === "";
+    const level = event.formKind === "normal" && entering && !specials.some(c => c.level === "จังหวัด") && specials.some(c => c.level === "ประเทศ") ? "ประเทศ" : fields.level;
+    const type = specials.some(c => c.level === level && c.type === fields.type) ? fields.type : "";
+    // Preserve explicit mode but discard any stale choice; all-age manual mode is obsolete.
+    return { ...fields, classMode, level, type };
+  }
+  classMode = "auto";
+  const match = automaticClass(event, fields);
+  return { ...fields, classMode, level: match?.level ?? fields.level, type: match?.type ?? "" };
+}
+export function classDescription(event: EventDetail, fields: Pick<FormFields, "level">, label: string) {
   const parsed = catalogClass(event, fields, label);
   return parsed?.kind === "special" ? parsed.criteria || "รุ่นพิเศษ: กรุณาตรวจสอบคุณสมบัติตามกติกาของงาน" : null;
 }
@@ -93,7 +110,9 @@ export function agreementsFor(event: EventDetail) {
   return eventAgreements[event.formKind].map(item => ({ key: item.key, text: item.text.replace("{cutoff}", cutoffAgreement(event.ageCutoffDay)) }));
 }
 export function buildRegistrationRequest(event: EventDetail, fields: FormFields, agreements: Record<string, boolean>, imageIds: string[], operationId: string, now = new Date()): RegistrationRequest {
-  const required = [fields.ownerName, fields.province, fields.farmName, fields.name, fields.fatherName, fields.motherName];
+  const ownerName = `${fields.firstName} ${fields.lastName}`;
+  if (![fields.firstName, fields.lastName].every(v => v?.trim()) || ownerName.length > 300) throw new Error("กรุณากรอกชื่อและนามสกุลเจ้าของกระบือ");
+  const required = [ownerName, fields.province, fields.farmName, fields.name, fields.fatherName, fields.motherName];
   if (required.some(v => !v.trim() || v.length > 300) || fields.microchip.length > 300) throw new Error("กรุณากรอกข้อมูลเจ้าของ ฟาร์ม จังหวัด และข้อมูลกระบือให้ครบ (ไม่ทราบพ่อหรือแม่ให้ระบุ ไม่ทราบ)");
   const ownerTel = normalizePhone(fields.ownerTel);
   if (!ownerTel) throw new Error("กรุณากรอกเบอร์โทรศัพท์ไทยให้ครบ เช่น 0812345678");
@@ -106,14 +125,24 @@ export function buildRegistrationRequest(event: EventDetail, fields: FormFields,
   const clauses = agreementsFor(event);
   if (clauses.some(clause => agreements[clause.key] !== true)) throw new Error("กรุณาอ่านและยินยอมข้อตกลงทุกข้อก่อนส่งใบสมัคร");
   const payload: RegistrationRequest = { operationId, type: normalizeClassName(fields.type), level: fields.level, name: fields.name,
-    sex: fields.sex, color: fields.color, birthdate: birthday.day, microchip: fields.microchip, ownerName: fields.ownerName, ownerTel,
+    sex: fields.sex, color: fields.color, birthdate: birthday.day, microchip: fields.microchip.trim() ? fields.microchip : fields.name, ownerName, ownerTel,
     fatherName: fields.fatherName, motherName: fields.motherName, farmName: fields.farmName, province: fields.province, buffaloAge,
     agreements: Object.fromEntries(clauses.map(clause => [clause.key, true as const])) };
   if (event.formKind === "royal") {
     if ([fields.address, fields.district, fields.amphoe].some(v => !v.trim() || v.length > 300) || !/^\d{5}$/.test(thaiDigits(fields.zipcode))) throw new Error("กรุณากรอกที่อยู่ ตำบล อำเภอ และรหัสไปรษณีย์ 5 หลักให้ครบ");
+    if (!getAmphoeFromProvince(fields.province).includes(fields.amphoe) || !getDistrictsFromAmphoe(fields.province, fields.amphoe).includes(fields.district)) throw new Error("กรุณาเลือกจังหวัด อำเภอ และตำบลให้ตรงกัน");
     if (imageIds.length !== 5 || new Set(imageIds).size !== 5 || imageIds.some(id => !/^image-[a-f0-9]+-\d+x\d+-(jpeg|jpg|png|webp)$/.test(id))) throw new Error("กรุณาอัปโหลดภาพให้ครบ 5 ภาพที่แตกต่างกัน");
     Object.assign(payload, { address: fields.address, district: fields.district, amphoe: fields.amphoe, zipcode: thaiDigits(fields.zipcode), imageIds: [...imageIds] });
   }
   return payload;
 }
 export const registrationStatusLabel: Record<RegistrationStatus, string> = { registered: "สมัครสำเร็จ", pending: "รอพิจารณา", approved: "ผ่านการพิจารณา", rejected: "ไม่ผ่านการพิจารณา" };
+
+export type HistoryPeriod = "active" | "past" | "all";
+export function registrationActive(row: import("@/types/events").RegistrationSummary, now = new Date()) {
+  const today = new Date(now.getTime() + 7 * 3600000).toISOString().slice(0, 10);
+  return !!row.event.endDay && row.event.endDay.slice(0, 10) >= today;
+}
+export function historyStatusLabel(row: import("@/types/events").RegistrationSummary) {
+  return row.status === "registered" && !registrationActive(row) ? "จบงานแล้ว" : registrationStatusLabel[row.status];
+}

@@ -9,10 +9,10 @@ const consent = (royal = false) => Object.fromEntries(agreementsFor(royal ? roya
 const uuid = "4a52ef5b-26bb-49b8-9ac0-cf06295a4902";
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; };
 describe("source registration payload and consent", () => {
-  it("builds normal source fields, preserves request strings, optional no-chip and exact4consents", () => {
+  it("builds normal source fields, concatenates required names, unchipped name fallback and exact4consents", () => {
     const fields = { ...filledFields, ownerName: "  ผู้สมัครทดสอบ  " };
     const request = buildRegistrationRequest(normalEvent, fields, consent(), [], uuid);
-    expect(request).toMatchObject({ operationId: uuid, ownerName: fields.ownerName, ownerTel: "0812345678", birthdate: "2023-10-31", buffaloAge: 36, microchip: "", agreements: { accept1: true, accept2: true, accept3: true, accept4: true } });
+    expect(request).toMatchObject({ operationId: uuid, ownerName: `${fields.firstName} ${fields.lastName}`, ownerTel: "0812345678", birthdate: "2023-10-31", buffaloAge: 36, microchip: fields.name, agreements: { accept1: true, accept2: true, accept3: true, accept4: true } });
     expect(Object.keys(request).sort()).toEqual(["operationId", "type", "level", "name", "sex", "color", "birthdate", "microchip", "ownerName", "ownerTel", "fatherName", "motherName", "farmName", "province", "buffaloAge", "agreements"].sort());
     expect(agreementsFor(normalEvent)[0].text).toBe("1. หากกระบือของท่านยังไม่มีการฝังไมโครชิป จะต้องดำเนินการฝังหน้างาน ตัวละ 500 บาท");
     expect(agreementsFor(normalEvent)[2].text).toContain("31 ตุลาคม");

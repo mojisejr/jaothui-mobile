@@ -13,6 +13,9 @@ export function getOpenEvents(query: EventQuery = {}, signal?: AbortSignal) {
 export function getEventDetail(eventId: string, signal?: AbortSignal) {
   return mobileRequest<EventDetail>(`/api/mobile/v2/events/${encodeURIComponent(eventId)}`, { signal });
 }
+export function getRegistrationBuffalo(token: string, microchip: string) {
+  return mobileGetWithAuth<import("@/types/events").RegistrationLookup>(`/api/mobile/v2/event-registration-lookup?${new URLSearchParams({ microchip })}`, token);
+}
 export function getEventMember(token: string) {
   return mobileGetWithAuth<EventMemberResult>("/api/mobile/v2/event-member", token);
 }
@@ -29,8 +32,8 @@ export function cancelEventLineLink(token: string, intentId: string) {
 export function enrollEventMember(token: string, fields: MemberEnrollment) {
   return mobilePostWithAuth<{ member: EventMember; created: boolean }>("/api/mobile/v2/event-member", fields, token);
 }
-export function getEventRegistrations(token: string, cursor?: string) {
-  const params = new URLSearchParams({ limit: "20" });
+export function getEventRegistrations(token: string, cursor?: string, period: "active" | "past" | "all" = "all", q = "") {
+  const params = new URLSearchParams({ limit: "20", period, q });
   if (cursor) params.set("cursor", cursor);
   return mobileGetWithAuth<RegistrationHistory>(`/api/mobile/v2/event-registrations?${params}`, token);
 }

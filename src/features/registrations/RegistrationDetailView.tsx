@@ -3,10 +3,10 @@ import { colors, radius, spacing } from "@/design/tokens";
 import type { RegistrationDetail } from "@/types/events";
 import { eventDayLabel } from "@/features/events/model";
 import { formStyles, FormHeading } from "./FormControls";
-import { registrationStatusLabel } from "./model";
+import { historyStatusLabel } from "./model";
 export function RegistrationDetailView({ registration, receipt = false, replayed = false }: { registration: RegistrationDetail; receipt?: boolean; replayed?: boolean }) {
   const r = registration;
-  return <View><Text style={formStyles.gold}>{receipt ? "ได้รับใบสมัครแล้ว" : "ใบสมัครของฉัน"}</Text><Text style={formStyles.title}>{r.buffalo.name}</Text><Text style={formStyles.body}>{r.event.name}</Text><Text style={[styles.status, { color: r.status === "rejected" ? colors.danger : r.status === "pending" ? colors.warning : colors.success }]}>{registrationStatusLabel[r.status]}</Text>
+  return <View><Text style={formStyles.gold}>{receipt ? "ได้รับใบสมัครแล้ว" : "ใบสมัครของฉัน"}</Text><Text style={formStyles.title}>{r.buffalo.name}</Text><Text style={formStyles.body}>{r.event.name}</Text><Text style={[styles.status, { color: r.status === "rejected" ? colors.danger : r.status === "pending" ? colors.warning : colors.success }]}>{historyStatusLabel(r)}</Text>
     {receipt ? <Text style={formStyles.body}>{replayed ? "พบใบสมัครที่บันทึกไว้จากคำขอเดิมแล้ว ไม่มีการสมัครซ้ำ" : "บันทึกใบสมัครเรียบร้อยแล้ว"}</Text> : null}
     {r.status === "pending" ? <Text style={formStyles.hint}>ใบสมัคร Royal อยู่ระหว่างพิจารณา กรุณาติดตามผลในประวัติการสมัคร</Text> : null}
     {r.approvalComment ? <Text style={formStyles.body}>ความเห็นจากกองประกวด: {r.approvalComment}</Text> : null}

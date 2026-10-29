@@ -23,6 +23,7 @@ export type EventDetail = EventSummary & {
   catalogs: { level: "จังหวัด" | "ประเทศ"; labels: string[] }[];
   formKind: "normal" | "royal";
 };
+export type RegistrationLookup = { buffalo: { name: string; sex: string | null; color: string | null; birthday: string | null; birthdate: number | null } };
 export type EventMember = { id: string; tel: string | null; email: string | null; role: string };
 export type EventMemberResult = { member: EventMember | null; capability: { canRegister: boolean; reason: string | null } };
 export type EventReturnIntent = { kind: "event-apply"; eventId: string } | { kind: "profile-link" };
@@ -44,7 +45,7 @@ export type RegistrationDetail = RegistrationSummary & {
   images?: { imageTitle: string; url: string | null }[];
   address?: { address: string; district: string; amphoe: string; province: string; zipcode: string } | null;
 };
-export type RegistrationHistory = { items: RegistrationSummary[]; nextCursor: string | null };
+export type RegistrationHistory = { eventNames?: string[]; items: RegistrationSummary[]; nextCursor: string | null };
 export type RegistrationRequest = {
   operationId: string; type: string; level: "จังหวัด" | "ประเทศ"; name: string; sex: "male" | "female";
   color: "black" | "albino"; birthdate: string; microchip: string; ownerName: string; ownerTel: string;

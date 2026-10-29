@@ -1,7 +1,7 @@
-import type { MobileCertDetail } from "@/types/mobile-api";
+import type { RegistrationLookup } from "@/types/events";
 import type { FormFields } from "./model";
 import { calendarInputFromDay, validBirthday } from "./birthday";
-/** BFF uses epoch milliseconds; older certificate responses used epoch seconds. */
+/** Registration blockchain DTO uses source epoch seconds; retain legacy draft compatibility. */
 export function lookupBirthday(birthday: string | null, epoch: number | null): string {
   if (birthday && validBirthday(birthday)) return calendarInputFromDay(birthday);
   if (typeof epoch !== "number" || !Number.isFinite(epoch) || epoch <= 0) return "";
@@ -12,13 +12,13 @@ export function lookupBirthday(birthday: string | null, epoch: number | null): s
   return validBirthday(day) ? calendarInputFromDay(day) : "";
 }
 /** A late lookup may fill only the exact field snapshot that requested it. */
-export function createBuffaloLookup(deps: { fields: () => FormFields; read: (microchip: string) => Promise<MobileCertDetail>; current: () => Promise<boolean>; apply: (fields: FormFields) => void; state: (busy: boolean, message: string | null) => void }) {
+export function createBuffaloLookup(deps: { fields: () => FormFields; read: (microchip: string) => Promise<RegistrationLookup>; current: () => Promise<boolean>; apply: (fields: FormFields) => void; state: (busy: boolean, message: string | null) => void }) {
   let generation = 0;
   return {
     cancel() { generation++; deps.state(false, null); },
     async lookup() {
       const before = { ...deps.fields() }, microchip = before.microchip.trim();
-      if (!/^\d{12,}$/.test(microchip)) return;
+      if (!microchip || microchip.length > 300) return;
       const request = ++generation, snapshot = JSON.stringify(before); deps.state(true, null);
       try {
         const result = await deps.read(microchip);
