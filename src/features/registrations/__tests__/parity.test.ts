@@ -1,5 +1,6 @@
+import { encodeCompetitionClass } from "../competitionClasses";
 import { createBuffaloLookup, lookupBirthday } from "../lookup";
-import { automaticClass, eligibleClasses, reconcileClasses, registrationAge } from "../model";
+import { automaticClass, eligibleClasses, reconcileClasses, registrationAge, catalogClass, agreementsFor, buildRegistrationRequest } from "../model";
 import { birthdayParts, birthdayDays, changeBirthdayPart, validBirthday } from "../birthday";
 import { parseCalendarInput, posterAspectRatio } from "@/features/events/model";
 import { filledFields, normalEvent } from "./fixtures";
@@ -54,5 +55,31 @@ describe("non-typing Thai date and full poster geometry", () => {
   it("derives portrait, landscape and tall detail ratios with stable missing/invalid fallback", () => {
     for (const [dimensions, ratio] of [["800x1000", .8], ["1600x900", 16 / 9], ["800x3200", .25]] as const) expect(posterAspectRatio(`https://cdn.sanity.io/images/p/d/abc-${dimensions}.jpg?w=800`)).toBe(ratio);
     for (const url of [null, "bad", "https://example.com/abc-800x3200.jpg", "https://cdn.sanity.io/images/p/d/abc-0x100.jpg"]) expect(posterAspectRatio(url)).toBe(.8);
+  });
+});
+
+describe("structured production catalogs preserve rule metadata", () => {
+  const name = "ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน";
+  const ageRule = encodeCompetitionClass({ name, kind: "age", minMonths: 24, maxMonths: 36, minInclusive: false, group: "ควายสวยงาม", criteria: "" });
+  const specialName = "ท้องถิ่น รวมสี อายุ 24–36 เดือน — ตรวจสิทธิ์หน้างาน";
+  const specialRule = encodeCompetitionClass({ name: specialName, kind: "special", minMonths: 24, maxMonths: 36, minInclusive: false, group: "ท้องถิ่น", criteria: "ตรวจสิทธิ์ท้องถิ่น" });
+  const productionEvent = { ...event, catalogs: [{ level: "ประเทศ" as const, labels: [ageRule, specialRule] }] };
+  const fields = { ...filledFields, birthdayInput: "15/04/2567", level: "ประเทศ" as const };
+  it("selects the actual 24–36 month structured division for the reported 32-month birthday and submits its display name", () => {
+    expect(registrationAge("2024-04-15", productionEvent.ageCutoffDay, false, "black")).toBe(32);
+    expect(automaticClass(productionEvent, fields)).toEqual({ level: "ประเทศ", type: name });
+    const selected = reconcileClasses(productionEvent, fields);
+    expect(selected.type).toBe(name);
+    const agreements = Object.fromEntries(agreementsFor(productionEvent).map(c => [c.key, true]));
+    expect(buildRegistrationRequest(productionEvent, selected, agreements, [], "regression-32-months")).toMatchObject({ type: name, buffaloAge: 32, level: "ประเทศ" });
+  });
+  it("retains structured special kind and eligibility without reparsing its descriptive name", () => {
+    const label = `[SP] ${specialName}`;
+    expect(catalogClass(productionEvent, fields, label)?.kind).toBe("special");
+    expect(reconcileClasses(productionEvent, { ...fields, classMode: "special", type: label }).type).toBe(label);
+    expect(eligibleClasses(productionEvent, { ...fields, birthdayInput: "23/11/2567" })).not.toContain(label);
+    expect(eligibleClasses(productionEvent, { ...fields, birthdayInput: "23/10/2567" })).toContain(name);
+    expect(eligibleClasses(productionEvent, { ...fields, birthdayInput: "23/11/2566" })).toContain(name);
+    expect(eligibleClasses(productionEvent, { ...fields, birthdayInput: "23/10/2566" })).not.toContain(name);
   });
 });

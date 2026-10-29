@@ -3,10 +3,9 @@ import type { EventDetail } from "@/types/events";
 import { EventButton } from "@/features/events/EventControls";
 import { eventDayLabel, parseCalendarInput } from "@/features/events/model";
 import { colors, radius, spacing } from "@/design/tokens";
-import { agreementsFor, automaticClass, classDescription, eligibleClasses, registrationAge, type FormFields } from "./model";
+import { agreementsFor, automaticClass, catalogClass, classDescription, eligibleClasses, registrationAge, type FormFields } from "./model";
 import { FormChoice, FormField, FormHeading, formStyles } from "./FormControls";
 import { ThaiBirthdayPicker } from "./ThaiBirthdayPicker";
-import { parseCompetitionClass } from "./competitionClasses";
 import { validBirthday } from "./birthday";
 import { photoTitles, type PhotoSlot } from "./photos";
 export type RegistrationFormViewProps = {
@@ -21,9 +20,9 @@ export type RegistrationFormViewProps = {
 export function RegistrationFormView(props: RegistrationFormViewProps) {
   const { event, value, onChange, agreements, photos, pending, busy } = props;
   const locked = busy || !!pending;
-  const mode = value.classMode ?? (parseCompetitionClass(value.type)?.kind === "special" ? "special" : "auto");
+  const mode = value.classMode ?? (catalogClass(event, value, value.type)?.kind === "special" ? "special" : "auto");
   const automatic = automaticClass(event, value);
-  const classes = eligibleClasses(event, value).filter(label => mode === "manual" || parseCompetitionClass(label)?.kind === "special");
+  const classes = eligibleClasses(event, value).filter(label => mode === "manual" || catalogClass(event, value, label)?.kind === "special");
   let age: number | null = null;
   try { const birth = parseCalendarInput(value.birthdayInput).day; if (birth && validBirthday(birth) && value.color && value.sex) age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", value.color); } catch { /* Invalid typed dates are validated on submit. */ }
   const field = (key: keyof FormFields, text: string) => onChange({ ...value, [key]: text });

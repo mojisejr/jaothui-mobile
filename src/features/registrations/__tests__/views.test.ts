@@ -1,4 +1,5 @@
 import React from "react";
+import { encodeCompetitionClass } from "../competitionClasses";
 import { FlatList, Modal, TextInput } from "react-native";
 import { RegistrationFormView, type RegistrationFormViewProps } from "../RegistrationFormView";
 import { RegistrationDetailView } from "../RegistrationDetailView";
@@ -17,6 +18,15 @@ const props = (royal = false): RegistrationFormViewProps => ({ event: royal ? ro
 describe("mounted source-derived forms and own history presentation", () => {
   let tree: ReturnType<typeof renderer.create>;
   afterEach(() => renderer.act(() => tree?.unmount()));
+  it("renders the reported 32-month buffalo with the structured 24–36 month division", () => {
+    const p = props();
+    const name = "ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน";
+    p.event = { ...p.event, ageCutoffDay: "2026-11-23", catalogs: [{ level: "ประเทศ", labels: [encodeCompetitionClass({ name, kind: "age", minMonths: 24, maxMonths: 36, minInclusive: false, group: "ควายสวยงาม", criteria: "" })] }] };
+    p.value = { ...p.value, birthdayInput: "15/04/2567", type: "", level: "ประเทศ" };
+    renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
+    expect(JSON.stringify(tree.toJSON())).toContain(`ระดับประเทศ · ${name}`);
+    expect(JSON.stringify(tree.toJSON())).not.toContain("ยังไม่มีรุ่นปกติที่ตรงกับข้อมูล");
+  });
   it.each([false, true])("renders all sourceconsents unchecked with explicit positive choice (Royal=%s)", royal => {
     const p = props(royal); renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
     for (const clause of agreementsFor(p.event)) {
