@@ -1,8 +1,9 @@
 import React from "react";
-import { AccessibilityInfo, FlatList, TextInput } from "react-native";
+import { AccessibilityInfo, FlatList, Image, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { HomeEventZone } from "../HomeEventZone";
 import { EventDetailScreen } from "../EventDetailScreen";
 import { EventListScreen } from "../EventListScreen";
+import { EventPreviewCard } from "../EventPreviewCard";
 import { MobileApiError } from "@/api/client";
 import type { EventDetail, EventList, EventSummary } from "@/types/events";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -10,7 +11,7 @@ const renderer = require("react-test-renderer") as {
   act: (callback: () => void | Promise<void>) => void | Promise<void>;
   create: (element: React.ReactElement) => { root: TestNode; toJSON: () => unknown; update: (element: React.ReactElement) => void; unmount: () => void };
 };
-type TestNode = { props: { accessibilityLabel: string; accessibilityState: { selected: boolean }; onPress: () => void; onChangeText: (value: string) => void; data: EventSummary[]; label: string }; findByType: (type: unknown) => TestNode; findAllByType: (type: unknown) => TestNode[]; findByProps: (props: Record<string, unknown>) => TestNode };
+type TestNode = { parent: TestNode | null; props: { accessibilityLabel: string; accessibilityState: { selected: boolean }; onPress: () => void; onChangeText: (value: string) => void; data: EventSummary[]; label: string; resizeMode: string; blurRadius?: number; source: { uri?: string }; style: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>) }; findByType: (type: unknown) => TestNode; findAllByType: (type: unknown) => TestNode[]; findByProps: (props: Record<string, unknown>) => TestNode };
 const mockPush = jest.fn(), mockReplace = jest.fn(), mockReload = jest.fn(), mockGet = jest.fn(), mockDetail = jest.fn(), mockMember = jest.fn();
 let mockResource: Record<string, unknown>;
 let mockEnvironment = { active: true, reduceMotion: false as boolean | null };
@@ -31,6 +32,28 @@ describe("mounted RN event discovery", () => {
   afterEach(() => { if (tree) renderer.act(() => tree.unmount()); jest.useRealTimers(); jest.restoreAllMocks(); });
   async function mount(element: React.ReactElement) { await renderer.act(async () => { tree = renderer.create(element); }); }
   const button = (label: string) => tree.root.findByProps({ accessibilityLabel: label, accessibilityRole: "button" });
+  it.each([false, true].flatMap(compact => ["https://cdn.sanity.io/images/project/production/poster-1920x1080.jpg", "https://cdn.sanity.io/images/project/production/poster-800x1000.jpg", null].map(imageUrl => ({ compact, imageUrl }))))("keeps a full-width 16:9 poster above text (compact=$compact, image=$imageUrl)", async ({ compact, imageUrl }) => {
+    const onPress = jest.fn();
+    await mount(React.createElement(EventPreviewCard, { event: { ...event(0), imageUrl }, onPress, compact, width: 320 }));
+    const card = tree.root.findByProps({ accessibilityRole: "button" }), cardStyle = card.props.style;
+    const layout = StyleSheet.flatten(typeof cardStyle === "function" ? cardStyle({ pressed: false }) : cardStyle);
+    expect(layout.width).toBe(320); expect(layout.flexDirection ?? "column").toBe("column");
+    const poster = tree.root.findAllByType(View).find(node => typeof node.props.style !== "function" && StyleSheet.flatten(node.props.style)?.aspectRatio === 16 / 9);
+    expect(poster).toBeDefined();
+    expect(StyleSheet.flatten(poster!.props.style as StyleProp<ViewStyle>).width).toBe("100%");
+    expect(poster!.findAllByType(Text)).toHaveLength(0);
+    const image = poster!.findByType(Image);
+    expect(image.props.resizeMode).toBe("contain"); expect(image.props.blurRadius ?? 0).toBe(0);
+    if (imageUrl) expect(image.props.source.uri).toBe(imageUrl);
+    expect(JSON.stringify(tree.toJSON())).toContain("ดูรายละเอียดและสมัคร →");
+    renderer.act(() => card.props.onPress()); expect(onPress).toHaveBeenCalledTimes(1);
+  });
+  it.each([["https://cdn.sanity.io/images/project/production/poster-1920x1080.jpg", 16 / 9], ["https://cdn.sanity.io/images/project/production/poster-800x1000.jpg", 4 / 5], [null, 16 / 9]] as const)("retains detail poster sizing for %s", async (imageUrl, ratio) => {
+    mockResource = { status: "success", data: { ...detail(), imageUrl } }; await mount(React.createElement(EventDetailScreen));
+    const poster = tree.root.findAllByType(View).find(node => typeof node.props.style !== "function" && StyleSheet.flatten(node.props.style)?.aspectRatio === ratio);
+    expect(poster).toBeDefined(); expect(poster!.findByType(Image).props.resizeMode).toBe("contain");
+    expect(tree.root.findByProps({ accessibilityLabel: "สมัครประกวด" })).toBeTruthy();
+  });
   it.each([0, 1, 5, 6, 7])("renders count%i with correct View All and no empty zone", async count => {
     mockResource = { status: "success", data: payload(count) }; await mount(React.createElement(HomeEventZone, { visible: true, onLayout: jest.fn() }));
     if (!count) { expect(tree.toJSON()).toBeNull(); return; }

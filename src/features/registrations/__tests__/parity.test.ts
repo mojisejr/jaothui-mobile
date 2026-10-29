@@ -54,7 +54,7 @@ describe("non-typing Thai date and full poster geometry", () => {
   });
   it("derives portrait, landscape and tall detail ratios with stable missing/invalid fallback", () => {
     for (const [dimensions, ratio] of [["800x1000", .8], ["1600x900", 16 / 9], ["800x3200", .25]] as const) expect(posterAspectRatio(`https://cdn.sanity.io/images/p/d/abc-${dimensions}.jpg?w=800`)).toBe(ratio);
-    for (const url of [null, "bad", "https://example.com/abc-800x3200.jpg", "https://cdn.sanity.io/images/p/d/abc-0x100.jpg"]) expect(posterAspectRatio(url)).toBe(.8);
+    for (const url of [null, "bad", "https://example.com/abc-800x3200.jpg", "https://cdn.sanity.io/images/p/d/abc-0x100.jpg"]) expect(posterAspectRatio(url)).toBe(16 / 9);
   });
 });
 

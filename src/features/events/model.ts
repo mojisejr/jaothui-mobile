@@ -36,13 +36,13 @@ export function createLatestRequestGate() {
 
 /** Read dimensions embedded in trusted Sanity asset URLs; no image requests or layout jumps. */
 export function posterAspectRatio(url: string | null): number {
-  if (!url) return 4 / 5;
+  if (!url) return 16 / 9;
   try {
     const source = new URL(url);
-    if (source.hostname !== "cdn.sanity.io" || !source.pathname.startsWith("/images/")) return 4 / 5;
+    if (source.hostname !== "cdn.sanity.io" || !source.pathname.startsWith("/images/")) return 16 / 9;
     const match = /-(\d+)x(\d+)\.[a-z]+$/i.exec(source.pathname);
-    if (!match) return 4 / 5;
+    if (!match) return 16 / 9;
     const width = Number(match[1]), height = Number(match[2]);
-    return width > 0 && height > 0 && width <= 100000 && height <= 100000 ? width / height : 4 / 5;
-  } catch { return 4 / 5; }
+    return width > 0 && height > 0 && width <= 100000 && height <= 100000 ? width / height : 16 / 9;
+  } catch { return 16 / 9; }
 }

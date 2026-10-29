@@ -1,7 +1,15 @@
-import { homeEventItems, stableEventIndex, shouldAutoplay, parseCalendarInput, formatCalendarInput, createLatestRequestGate } from "../model";
+import { homeEventItems, stableEventIndex, shouldAutoplay, parseCalendarInput, formatCalendarInput, createLatestRequestGate, posterAspectRatio } from "../model";
 import { eventQueryString } from "@/api/events";
 import type { EventSummary } from "@/types/events";
 const event = (id: number, open = true): EventSummary => ({ id: `event-${id}`, name: `งาน ${id}`, eventType: "normal", imageUrl: null, competitionStartDay: "2026-10-29", competitionEndDay: "2026-10-31", registrationStartDay: null, registrationDeadline: null, publicRegistration: open ? "open" : "closed-manual", location: null });
+describe("event detail poster dimensions", () => {
+  it.each([["1920x1080", 16 / 9], ["800x1000", 4 / 5]])("preserves natural Sanity %s dimensions", (dimensions, expected) => {
+    expect(posterAspectRatio(`https://cdn.sanity.io/images/project/production/poster-${dimensions}.jpg?auto=format`)).toBe(expected);
+  });
+  it.each([null, "", "invalid", "https://example.com/poster-800x1000.jpg", "https://cdn.sanity.io/images/project/production/poster.jpg", "https://cdn.sanity.io/images/project/production/poster-0x1000.jpg"])("uses a landscape fallback for %s", url => {
+    expect(posterAspectRatio(url)).toBe(16 / 9);
+  });
+});
 describe("event discovery policies", () => {
   it.each([0, 1, 5, 6, 7])("bounds %i open previews independently from totalOpen", count => {
     const source = Array.from({ length: count }, (_, i) => event(i));
