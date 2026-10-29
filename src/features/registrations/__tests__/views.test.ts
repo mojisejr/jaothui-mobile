@@ -1,8 +1,9 @@
 import React from "react";
-import { FlatList, TextInput } from "react-native";
+import { FlatList, Modal, TextInput } from "react-native";
 import { RegistrationFormView, type RegistrationFormViewProps } from "../RegistrationFormView";
 import { RegistrationDetailView } from "../RegistrationDetailView";
 import { RegistrationHistoryView } from "../RegistrationHistoryView";
+import { ThaiBirthdayPicker } from "../ThaiBirthdayPicker";
 import { agreementsFor } from "../model";
 import { emptyPhotos, photoTitles } from "../photos";
 import { normalEvent, royalEvent, filledFields, registration } from "./fixtures";
@@ -11,7 +12,7 @@ const renderer = require("react-test-renderer") as {
   act: (callback: () => void | Promise<void>) => void | Promise<void>;
   create: (element: React.ReactElement) => { root: TestNode; toJSON: () => unknown; update: (element: React.ReactElement) => void; unmount: () => void };
 };
-type TestNode = { props: { accessibilityState: { checked: boolean; disabled: boolean }; onPress: () => void; editable: boolean; data: unknown[] }; findByProps: (props: Record<string, unknown>) => TestNode; findByType: (type: unknown) => TestNode; findAllByType: (type: unknown) => TestNode[] };
+type TestNode = { props: { accessibilityState: { checked: boolean; disabled: boolean }; onPress: () => void; onRequestClose: () => void; visible: boolean; editable: boolean; data: unknown[] }; findByProps: (props: Record<string, unknown>) => TestNode; findByType: (type: unknown) => TestNode; findAllByType: (type: unknown) => TestNode[] };
 const props = (royal = false): RegistrationFormViewProps => ({ event: royal ? royalEvent : normalEvent, value: { ...filledFields }, agreements: {}, photos: emptyPhotos(), busy: false, lookupBusy: false, onChange: jest.fn(), onAgreement: jest.fn(), onPhoto: jest.fn(), onRemovePhoto: jest.fn(), onRetryPhoto: jest.fn(), onLookup: jest.fn(), onSubmit: jest.fn(), onEditRejected: jest.fn(), onRefresh: jest.fn() });
 describe("mounted source-derived forms and own history presentation", () => {
   let tree: ReturnType<typeof renderer.create>;
@@ -31,6 +32,21 @@ describe("mounted source-derived forms and own history presentation", () => {
     expect(JSON.stringify(tree.toJSON())).toContain("อัปโหลดไม่สำเร็จ"); expect(tree.root.findAllByType(TextInput).every(node => node.props.editable === false)).toBe(true);
     expect(tree.root.findByProps({ accessibilityLabel: "ตรวจสอบคำขอเดิมอีกครั้ง" })).toBeDefined();
     for (let i = 1; i <= 5; i++) expect(tree.root.findByProps({ accessibilityLabel: `${i === 1 ? "เปลี่ยนภาพ" : "เลือกภาพ"} ${i}` })).toBeDefined();
+  });
+  it("opens date options without typing, and cancel/Android Back preserve the committed draft", () => {
+    const onChange = jest.fn();
+    renderer.act(() => { tree = renderer.create(React.createElement(ThaiBirthdayPicker, { value: "29/02/2567", onChange })); });
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+    renderer.act(() => tree.root.findByProps({ accessibilityLabel: "เลือกเดือน" }).props.onPress());
+    expect(tree.root.findByType(Modal).props.visible).toBe(true);
+    renderer.act(() => tree.root.findByType(Modal).props.onRequestClose());
+    expect(tree.root.findByType(Modal).props.visible).toBe(false); expect(onChange).not.toHaveBeenCalled();
+    renderer.act(() => tree.root.findByProps({ accessibilityLabel: "เลือกปี พ.ศ." }).props.onPress());
+    renderer.act(() => tree.root.findByProps({ accessibilityLabel: "2566" }).props.onPress());
+    expect(onChange).toHaveBeenCalledWith("/02/2566");
+    renderer.act(() => tree.root.findByProps({ accessibilityLabel: "เลือกวัน" }).props.onPress());
+    renderer.act(() => tree.root.findByProps({ accessibilityLabel: "ยกเลิก" }).props.onPress());
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
   it("renders ended own history and distinct normal/pending/approved/rejected filters", () => {
     const items = (["registered", "pending", "approved", "rejected"] as const).map((status, i) => ({ ...registration, id: `history-${i}`, status }));

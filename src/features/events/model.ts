@@ -33,3 +33,16 @@ export function createLatestRequestGate() {
   let version = 0;
   return { start: () => ++version, current: (candidate: number) => candidate === version, invalidate: () => { version++; } };
 }
+
+/** Read dimensions embedded in trusted Sanity asset URLs; no image requests or layout jumps. */
+export function posterAspectRatio(url: string | null): number {
+  if (!url) return 4 / 5;
+  try {
+    const source = new URL(url);
+    if (source.hostname !== "cdn.sanity.io" || !source.pathname.startsWith("/images/")) return 4 / 5;
+    const match = /-(\d+)x(\d+)\.[a-z]+$/i.exec(source.pathname);
+    if (!match) return 4 / 5;
+    const width = Number(match[1]), height = Number(match[2]);
+    return width > 0 && height > 0 && width <= 100000 && height <= 100000 ? width / height : 4 / 5;
+  } catch { return 4 / 5; }
+}

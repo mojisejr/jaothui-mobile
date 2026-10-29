@@ -14,7 +14,7 @@ import { validEventId } from "@/auth/oauthIntentStorage";
 import { recoverRejectedMobileSession } from "@/features/profile/sessionRecovery";
 import { eventDraft, discardEventDraft, type EventDraft } from "./drafts";
 import { sameCustomer, eventAccountError, type CustomerSession } from "./customer";
-import { validateMember, buildRegistrationRequest } from "./model";
+import { validateMember, buildRegistrationRequest, reconcileClasses } from "./model";
 import { eventPrivateRequest } from "./privateRequest";
 import { createBuffaloLookup } from "./lookup";
 import { createSubmission } from "./submission";
@@ -45,6 +45,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       const draft = eventDraft(session.identity.accountId, eventId);
       if (!draft.fields.ownerTel && membership.member?.tel) draft.fields.ownerTel = membership.member.tel;
       if (!event.catalogs.some(c => c.level === draft.fields.level) && event.catalogs[0]) draft.fields.level = event.catalogs[0].level;
+      if (!draft.pending) draft.fields = reconcileClasses(event, draft.fields);
       const ready = { session, event, member: membership.member, draft }; current.current = ready; setData(ready);
     })().catch(failure => { if (active.current && request === epoch.current) setError(failure); });
   }, [eventId]);
@@ -64,7 +65,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       return result;
     }, () => { d.draft.pending = submission.pending; if (active.current && current.current === d) refreshUI(); }, d.draft.pending && { ...d.draft.pending, state: d.draft.pending.state === "sending" ? "uncertain" : d.draft.pending.state });
     const lookup = createBuffaloLookup({ fields: () => d.draft.fields, read: getCertDetail, current: () => isCurrent(d),
-      apply: fields => { d.draft.fields = fields; d.draft.dirty = true; refreshUI(); },
+      apply: fields => { if (d.draft.pending || lock.current) return; d.draft.fields = reconcileClasses(d.event, fields, d.draft.fields); d.draft.dirty = true; refreshUI(); },
       state: (working, message) => { if (active.current && current.current === d) { setLookupBusy(working); if (message !== null) setLookupMessage(message); } } });
     return { photos, submission, lookup };
   }, [data, eventId, isCurrent, refreshUI]);
@@ -78,6 +79,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       if (!await isCurrent(data)) return;
       const changed = JSON.stringify([event.formKind, event.ageCutoffDay, event.catalogs]) !== JSON.stringify([data.event.formKind, data.event.ageCutoffDay, data.event.catalogs]);
       if (changed && (!data.draft.pending || data.draft.pending.state === "rejected")) data.draft.agreements = {};
+      if (!data.draft.pending && changed) data.draft.fields = reconcileClasses(event, { ...data.draft.fields, classMode: "auto", type: "" });
       data.event = event; setProblem(changed ? "กติกาเปลี่ยนแล้ว กรุณาตรวจสอบรุ่นและอ่านข้อตกลงอีกครั้ง ข้อมูลที่กรอกยังอยู่" : "อัปเดตกติกาล่าสุดแล้ว"); refreshUI();
     } catch (failure) { setProblem(eventAccountError(failure)); }
   };
@@ -102,12 +104,13 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
   };
   const submit = async () => {
     if (!data || !managers || lock.current) return;
-    lock.current = true; setBusy(true); setProblem(null);
+    managers.lookup.cancel(); lock.current = true; setBusy(true); setProblem(null);
     try {
       if (!managers.submission.pending) {
         const fresh = await getEventDetail(eventId);
         if (!await isCurrent(data)) throw new Error("บัญชีเปลี่ยนแล้ว กรุณาเริ่มใหม่");
         const changed = JSON.stringify([fresh.formKind, fresh.ageCutoffDay, fresh.catalogs]) !== JSON.stringify([data.event.formKind, data.event.ageCutoffDay, data.event.catalogs]);
+        if (!data.draft.pending) data.draft.fields = reconcileClasses(fresh, { ...data.draft.fields, ...(changed ? { classMode: "auto" as const, type: "" } : {}) });
         data.event = fresh;
         if (changed) { data.draft.agreements = {}; throw new Error("กติกาเปลี่ยนแล้ว กรุณาตรวจสอบรุ่นและอ่านข้อตกลงอีกครั้ง ข้อมูลที่กรอกยังอยู่"); }
         if (fresh.policy.publicRegistration !== "open") throw new Error("กิจกรรมนี้ปิดรับสมัครแล้ว ข้อมูลที่กรอกยังอยู่");
@@ -134,10 +137,10 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
     <Pressable accessibilityRole="button" onPress={back} style={formStyles.back}><Text style={formStyles.gold}>← รายละเอียดกิจกรรม</Text></Pressable>
     {error ? <CustomerGate error={error} retry={load} eventId={eventId} /> : !data ? <Skeleton variant="card" /> : receipt ? <><RegistrationDetailView registration={receipt.registration} receipt replayed={receipt.replayed} /><View style={formStyles.actions}><EventButton label="ดูประวัติการสมัครของฉัน" onPress={() => router.replace("/registrations")} /></View></> : memberMode && !data.member ? <MemberFormView value={data.draft.member} onChange={value => { data.draft.member = value; data.draft.dirty = true; refreshUI(); }} onSubmit={() => { void enroll(); }} busy={busy} error={problem} /> : memberMode || !data.member ? <StateBlock title={data.member ? "สมาชิกกิจกรรมพร้อมแล้ว" : "สมัครสมาชิกกิจกรรมก่อน"} message="ใช้สมาชิกประกวดชุดเดียวกัน โดยไม่ต้องเชื่อมกระเป๋าเงิน" actionLabel={data.member ? "กรอกใบสมัครประกวด" : "กรอกข้อมูลสมาชิก"} onAction={() => { data.draft.dirty = false; router.replace({ pathname: data.member ? "/events/[eventId]/register" : "/events/[eventId]/member", params: { eventId } }); }} /> : managers ? <RegistrationFormView
       event={data.event} value={data.draft.fields} agreements={data.draft.agreements} photos={data.draft.photos} busy={busy} pending={managers.submission.pending?.state} error={problem}
-      onChange={fields => { if (data.draft.pending || lock.current) return; data.draft.fields = fields; data.draft.dirty = true; managers.lookup.cancel(); setLookupMessage(null); refreshUI(); }}
+      onChange={fields => { if (data.draft.pending || lock.current) return; data.draft.fields = reconcileClasses(data.event, fields, data.draft.fields); data.draft.dirty = true; managers.lookup.cancel(); setLookupMessage(null); refreshUI(); }}
       onAgreement={(key, checked) => { if (!data.draft.pending && !lock.current) { data.draft.agreements = { ...data.draft.agreements, [key]: checked }; data.draft.dirty = true; refreshUI(); } }}
       onPhoto={(i, camera) => { if (!data.draft.pending && !lock.current) guardedPhoto(() => managers.photos.choose(i, camera)); }} onRemovePhoto={i => { if (!data.draft.pending && !lock.current) managers.photos.remove(i); }} onRetryPhoto={i => { if (!data.draft.pending && !lock.current) guardedPhoto(() => managers.photos.retry(i)); }}
-      onLookup={() => { if (!data.draft.pending && !lock.current) { setLookupMessage(null); void managers.lookup.lookup(); } }} lookupBusy={lookupBusy} lookupMessage={lookupMessage} onSubmit={() => { void submit(); }} onRefresh={() => { void refreshRules(); }} onEditRejected={() => { if (lock.current || managers.submission.pending?.state !== "rejected") return; managers.submission.edit(); data.draft.pending = undefined; setProblem(null); refreshUI(); }} /> : null}
+      onLookup={() => { if (!data.draft.pending && !lock.current) { setLookupMessage(null); void managers.lookup.lookup(); } }} lookupBusy={lookupBusy} lookupMessage={lookupMessage} onSubmit={() => { void submit(); }} onRefresh={() => { void refreshRules(); }} onEditRejected={() => { if (lock.current || managers.submission.pending?.state !== "rejected") return; managers.submission.edit(); data.draft.pending = undefined; data.draft.fields = reconcileClasses(data.event, data.draft.fields); setProblem(null); refreshUI(); }} /> : null}
     <ExitConfirmation {...exit} />
   </Screen></KeyboardAvoidingView>;
 }

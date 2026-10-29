@@ -1,11 +1,13 @@
 import type { EventDetail, MemberEnrollment, RegistrationRequest, RegistrationStatus } from "@/types/events";
 import { parseCalendarInput } from "@/features/events/model";
 import { classDisplayName, getEligibleCompetitionClasses, normalizeClassName, parseCompetitionClass } from "./competitionClasses";
+import { validBirthday } from "./birthday";
 import { eventAgreements } from "./agreements";
 
 export type FormFields = {
   ownerName: string; ownerTel: string; province: string; farmName: string; name: string; microchip: string;
   sex: "" | "male" | "female"; color: "" | "black" | "albino"; birthdayInput: string;
+  classMode?: "auto" | "special" | "manual";
   fatherName: string; motherName: string; level: "จังหวัด" | "ประเทศ"; type: string;
   address: string; district: string; amphoe: string; zipcode: string;
 };
@@ -47,11 +49,30 @@ export function registrationAge(birth: string, cutoff: string | null, royal: boo
 }
 export function eligibleClasses(event: EventDetail, fields: FormFields) {
   const birth = parseCalendarInput(fields.birthdayInput).day;
-  if (!birth || !fields.color) return [];
+  if (!birth || !validBirthday(birth) || !fields.color || !fields.sex) return [];
   try {
     const age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", fields.color);
     return getEligibleCompetitionClasses(age, event.catalogs.filter(c => c.level === fields.level).flatMap(c => c.labels));
   } catch { return []; }
+}
+/** Match the web: province wins when normal age classes exist at both levels. */
+export function automaticClass(event: EventDetail, fields: FormFields) {
+  for (const level of ["จังหวัด", "ประเทศ"] as const) {
+    const labels = eligibleClasses(event, { ...fields, level });
+    const type = labels.find(label => parseCompetitionClass(label)?.kind === "age");
+    if (type) return { level, type };
+  }
+  return null;
+}
+export function reconcileClasses(event: EventDetail, fields: FormFields, previous?: FormFields): FormFields {
+  const changed = previous && ["microchip", "birthdayInput", "sex", "color"].some(key => fields[key as keyof FormFields] !== previous[key as keyof FormFields]);
+  const classMode = changed ? "auto" : fields.classMode ?? (parseCompetitionClass(fields.type)?.kind === "special" ? "special" : "auto");
+  if (classMode === "auto") {
+    const match = automaticClass(event, fields);
+    return { ...fields, classMode, level: match?.level ?? fields.level, type: match?.type ?? "" };
+  }
+  const type = eligibleClasses(event, fields).includes(fields.type) && (classMode !== "special" || parseCompetitionClass(fields.type)?.kind === "special") ? fields.type : "";
+  return { ...fields, classMode, type };
 }
 export function classDescription(event: EventDetail, fields: FormFields, label: string) {
   const raw = event.catalogs.filter(c => c.level === fields.level).flatMap(c => c.labels).find(value => classDisplayName(value) === label);
