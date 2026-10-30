@@ -25,8 +25,29 @@ describe("mounted source-derived forms and own history presentation", () => {
     p.event = { ...p.event, ageCutoffDay: "2026-11-23", catalogs: [{ level: "ประเทศ", labels: [encodeCompetitionClass({ name, kind: "age", minMonths: 24, maxMonths: 36, minInclusive: false, group: "ควายสวยงาม", criteria: "" })] }] };
     p.value = { ...p.value, birthdayInput: "15/04/2567", type: "", level: "ประเทศ" };
     renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
-    expect(JSON.stringify(tree.toJSON())).toContain(`ระดับประเทศ · ${name}`);
+    expect(JSON.stringify(tree.toJSON())).toContain("ระดับประเทศ");
+    expect(JSON.stringify(tree.toJSON())).toContain(name);
     expect(JSON.stringify(tree.toJSON())).not.toContain("ยังไม่มีรุ่นปกติที่ตรงกับข้อมูล");
+  });
+  it("shows normal age and eligible groups immediately after a manual DOB without sex/color", () => {
+    const p = props(); p.value = { ...p.value, color: "", sex: "" };
+    renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
+    const content = JSON.stringify(tree.toJSON());
+    expect(content).toContain("อายุประกวด 36 เดือน"); expect(content).toContain("รุ่นตามอายุ (1)"); expect(content).toContain("รุ่นพิเศษ (1)");
+  });
+  it("shows normal levels and regular/SP groups together, retaining open chip/name input and locked controls", () => {
+    const p = props();
+    renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });
+    const content = JSON.stringify(tree.toJSON());
+    for (const label of ["ระดับประเทศ", "ระดับจังหวัด / ท้องถิ่น", "รุ่นตามอายุ (1)", "รุ่นพิเศษ (1)", "แม่ลูก"]) expect(content).toContain(label);
+    expect(content).not.toContain('"accessibilityLabel":"เลือกรุ่นพิเศษ"');
+    expect(tree.root.findByProps({ accessibilityLabel: "ไมโครชิป / ชื่อกระบือ" }).props.editable).toBe(true);
+    renderer.act(() => tree.root.findByProps({ accessibilityRole: "radio", accessibilityLabel: "ระดับประเทศ" }).props.onPress());
+    expect(p.onChange).toHaveBeenCalledWith({ ...p.value, level: "ประเทศ" });
+    renderer.act(() => tree.root.findByProps({ accessibilityRole: "radio", accessibilityLabel: "รุ่นพิเศษ: [SP] แม่ลูก" }).props.onPress());
+    expect(p.onChange).toHaveBeenCalledWith({ ...p.value, type: "[SP] แม่ลูก" });
+    renderer.act(() => tree.update(React.createElement(RegistrationFormView, { ...p, pending: "uncertain" })));
+    expect(tree.root.findByProps({ accessibilityRole: "radio", accessibilityLabel: "ระดับประเทศ" }).props.accessibilityState.disabled).toBe(true);
   });
   it.each([false, true])("renders all sourceconsents unchecked with explicit positive choice (Royal=%s)", royal => {
     const p = props(royal); renderer.act(() => { tree = renderer.create(React.createElement(RegistrationFormView, p)); });

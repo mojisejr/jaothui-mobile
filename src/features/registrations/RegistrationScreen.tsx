@@ -11,9 +11,9 @@ import { Skeleton } from "@/components/Skeleton";
 import { EventButton } from "@/features/events/EventControls";
 import { validEventId } from "@/auth/oauthIntentStorage";
 import { recoverRejectedMobileSession } from "@/features/profile/sessionRecovery";
-import { eventDraft, discardEventDraft, type EventDraft } from "./drafts";
+import { eventDraft, discardEventDraft, beginAnotherNormalRegistration, type EventDraft } from "./drafts";
 import { sameCustomer, eventAccountError, type CustomerSession } from "./customer";
-import { validateMember, buildRegistrationRequest, reconcileClasses, migrateOwnerFields } from "./model";
+import { validateMember, buildRegistrationRequest, reconcileClasses, prepareRegistrationFields } from "./model";
 import { eventPrivateRequest } from "./privateRequest";
 import { createBuffaloLookup } from "./lookup";
 import { createSubmission } from "./submission";
@@ -41,15 +41,21 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       const [event, { session, value: membership }] = await Promise.all([getEventDetail(eventId), eventPrivateRequest(s => getEventMember(s.sessionToken))]);
       if (!active.current || request !== epoch.current) return;
       if (!await sameCustomer(session)) throw new Error("บัญชีเปลี่ยนแล้ว กรุณาโหลดข้อมูลใหม่");
+      if (!active.current || request !== epoch.current) return;
       const draft = eventDraft(session.identity.accountId, eventId);
       if (!draft.fields.ownerTel && membership.member?.tel) draft.fields.ownerTel = membership.member.tel;
-      if (!event.catalogs.some(c => c.level === draft.fields.level) && event.catalogs[0]) draft.fields.level = event.catalogs[0].level;
-      if (!draft.pending) draft.fields = reconcileClasses(event, migrateOwnerFields(draft.fields));
+      if (!draft.pending && !draft.receipt) {
+        if (event.formKind === "royal" && !event.catalogs.some(c => c.level === draft.fields.level) && event.catalogs[0]) draft.fields.level = event.catalogs[0].level;
+        draft.fields = prepareRegistrationFields(event, draft.fields);
+      }
       const ready = { session, event, member: membership.member, draft }; current.current = ready; setData(ready);
     })().catch(failure => { if (active.current && request === epoch.current) setError(failure); });
   }, [eventId]);
   useFocusEffect(useCallback(() => { active.current = true; load(); return () => { active.current = false; epoch.current++; current.current = null; }; }, [load]));
-  const isCurrent = useCallback(async (d: Ready) => active.current && current.current === d && await sameCustomer(d.session), []);
+  const isCurrent = useCallback(async (d: Ready) => {
+    if (!active.current || current.current !== d || !await sameCustomer(d.session)) return false;
+    return active.current && current.current === d;
+  }, []);
   const managers = useMemo(() => {
     if (!data) return null;
     const d = data;
@@ -78,7 +84,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       if (!await isCurrent(data)) return;
       const changed = JSON.stringify([event.formKind, event.ageCutoffDay, event.catalogs]) !== JSON.stringify([data.event.formKind, data.event.ageCutoffDay, data.event.catalogs]);
       if (changed && (!data.draft.pending || data.draft.pending.state === "rejected")) data.draft.agreements = {};
-      if (!data.draft.pending && changed) data.draft.fields = reconcileClasses(event, { ...data.draft.fields, classMode: "auto", type: "" });
+      if (!data.draft.pending && changed) data.draft.fields = reconcileClasses(event, event.formKind === "normal" ? data.draft.fields : { ...data.draft.fields, classMode: "auto", type: "" });
       data.event = event; setProblem(changed ? "กติกาเปลี่ยนแล้ว กรุณาตรวจสอบรุ่นและอ่านข้อตกลงอีกครั้ง ข้อมูลที่กรอกยังอยู่" : "อัปเดตกติกาล่าสุดแล้ว"); refreshUI();
     } catch (failure) { setProblem(eventAccountError(failure)); }
   };
@@ -110,7 +116,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
         const fresh = await getEventDetail(eventId);
         if (!await isCurrent(data)) throw new Error("บัญชีเปลี่ยนแล้ว กรุณาเริ่มใหม่");
         const changed = JSON.stringify([fresh.formKind, fresh.ageCutoffDay, fresh.catalogs]) !== JSON.stringify([data.event.formKind, data.event.ageCutoffDay, data.event.catalogs]);
-        if (!data.draft.pending) data.draft.fields = reconcileClasses(fresh, { ...data.draft.fields, ...(changed ? { classMode: "auto" as const, type: "" } : {}) });
+        if (!data.draft.pending) data.draft.fields = reconcileClasses(fresh, { ...data.draft.fields, ...(changed && fresh.formKind === "royal" ? { classMode: "auto" as const, type: "" } : {}) });
         data.event = fresh;
         if (changed) { data.draft.agreements = {}; throw new Error("กติกาเปลี่ยนแล้ว กรุณาตรวจสอบรุ่นและอ่านข้อตกลงอีกครั้ง ข้อมูลที่กรอกยังอยู่"); }
         if (fresh.policy.publicRegistration !== "open") throw new Error("กิจกรรมนี้ปิดรับสมัครแล้ว ข้อมูลที่กรอกยังอยู่");
@@ -124,6 +130,7 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
         if (failure instanceof MobileApiError && ["REGISTRATION_CLOSED", "EVENT_REVISION_CONFLICT", "INVALID_CLASS"].includes(failure.code)) {
           try {
             const fresh = await getEventDetail(eventId);
+            if (!await isCurrent(data)) return;
             if (JSON.stringify([fresh.formKind, fresh.ageCutoffDay, fresh.catalogs]) !== JSON.stringify([data.event.formKind, data.event.ageCutoffDay, data.event.catalogs])) data.draft.agreements = {};
             data.event = fresh;
           } catch { /* Keep entered values and the rejected operation. */ }
@@ -131,11 +138,24 @@ export function RegistrationScreen({ memberMode = false }: { memberMode?: boolea
       }
     } finally { lock.current = false; if (active.current) { setBusy(false); refreshUI(); } }
   };
+  const beginAnother = async () => {
+    if (!data || !managers || lock.current || busy || !data.draft.receipt || data.event.formKind !== "normal") return;
+    try {
+      if (!await isCurrent(data) || lock.current || current.current !== data) return;
+      managers.lookup.cancel();
+      const draft = beginAnotherNormalRegistration(data.session.identity.accountId, data.event, data.draft);
+      const ready = { ...data, draft };
+      // Rebind all managers to a fresh Ready object. The old submission closure still owns only its old payload.
+      current.current = ready; setData(ready); setProblem(null); setLookupMessage(null); setLookupBusy(false);
+    } catch (failure) {
+      if (active.current && current.current === data) setProblem(eventAccountError(failure));
+    }
+  };
   const guardedPhoto = (operation: () => Promise<void>) => { void operation().catch(failure => setProblem(eventAccountError(failure))); };
   const receipt = data?.draft.receipt;
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}><Screen activeTab="home" showBottomNav={false}>
     <Pressable accessibilityRole="button" onPress={back} style={formStyles.back}><Text style={formStyles.gold}>← รายละเอียดกิจกรรม</Text></Pressable>
-    {error ? <CustomerGate error={error} retry={load} eventId={eventId} /> : !data ? <Skeleton variant="card" /> : receipt ? <><RegistrationDetailView registration={receipt.registration} receipt replayed={receipt.replayed} /><View style={formStyles.actions}><EventButton label="ดูประวัติการสมัครของฉัน" onPress={() => router.replace("/registrations")} /></View></> : memberMode && !data.member ? <MemberFormView value={data.draft.member} onChange={value => { data.draft.member = value; data.draft.dirty = true; refreshUI(); }} onSubmit={() => { void enroll(); }} busy={busy} error={problem} /> : memberMode || !data.member ? <StateBlock title={data.member ? "สมาชิกกิจกรรมพร้อมแล้ว" : "สมัครสมาชิกกิจกรรมก่อน"} message="ใช้สมาชิกประกวดชุดเดียวกัน โดยไม่ต้องเชื่อมกระเป๋าเงิน" actionLabel={data.member ? "กรอกใบสมัครประกวด" : "กรอกข้อมูลสมาชิก"} onAction={() => { data.draft.dirty = false; router.replace({ pathname: data.member ? "/events/[eventId]/register" : "/events/[eventId]/member", params: { eventId } }); }} /> : managers ? <RegistrationFormView
+    {error ? <CustomerGate error={error} retry={load} eventId={eventId} /> : !data ? <Skeleton variant="card" /> : receipt ? <><RegistrationDetailView registration={receipt.registration} receipt replayed={receipt.replayed} />{problem ? <Text accessibilityRole="alert" style={formStyles.error}>{problem}</Text> : null}<View style={formStyles.actions}>{data.event.formKind === "normal" ? <EventButton label="สมัครควายตัวนี้เพิ่มอีกระดับหรือรุ่นอื่น" disabled={busy} onPress={() => { void beginAnother(); }} /> : null}<EventButton label="ดูประวัติการสมัครของฉัน" onPress={() => router.replace("/registrations")} /></View></> : memberMode && !data.member ? <MemberFormView value={data.draft.member} onChange={value => { data.draft.member = value; data.draft.dirty = true; refreshUI(); }} onSubmit={() => { void enroll(); }} busy={busy} error={problem} /> : memberMode || !data.member ? <StateBlock title={data.member ? "สมาชิกกิจกรรมพร้อมแล้ว" : "สมัครสมาชิกกิจกรรมก่อน"} message="ใช้สมาชิกประกวดชุดเดียวกัน โดยไม่ต้องเชื่อมกระเป๋าเงิน" actionLabel={data.member ? "กรอกใบสมัครประกวด" : "กรอกข้อมูลสมาชิก"} onAction={() => { data.draft.dirty = false; router.replace({ pathname: data.member ? "/events/[eventId]/register" : "/events/[eventId]/member", params: { eventId } }); }} /> : managers ? <RegistrationFormView
       event={data.event} value={data.draft.fields} agreements={data.draft.agreements} photos={data.draft.photos} busy={busy} pending={managers.submission.pending?.state} error={problem}
       onChange={fields => { if (data.draft.pending || lock.current) return; data.draft.fields = reconcileClasses(data.event, fields, data.draft.fields); data.draft.dirty = true; managers.lookup.cancel(); setLookupMessage(null); refreshUI(); }}
       onAgreement={(key, checked) => { if (!data.draft.pending && !lock.current) { data.draft.agreements = { ...data.draft.agreements, [key]: checked }; data.draft.dirty = true; refreshUI(); } }}

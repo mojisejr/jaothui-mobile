@@ -4,12 +4,14 @@ import { classDisplayName, getEligibleCompetitionClasses, normalizeClassName, pa
 import { validBirthday } from "./birthday";
 import { getAmphoeFromProvince, getDistrictsFromAmphoe } from "./addressHelper";
 import { eventAgreements } from "./agreements";
+import { suggestNormalSelection, type NormalClassOptions } from "./normalLevels";
 
 export type FormFields = {
   firstName: string; lastName: string; ownerName: string; ownerTel: string; province: string; farmName: string; name: string; microchip: string;
   sex: "" | "male" | "female"; color: "" | "black" | "albino"; birthdayInput: string;
   classMode?: "auto" | "special" | "manual";
-  fatherName: string; motherName: string; level: "จังหวัด" | "ประเทศ"; type: string;
+  fatherName: string; motherName: string; level: "" | "จังหวัด" | "ประเทศ"; type: string;
+  normalSelectionVersion?: 1;
   address: string; district: string; amphoe: string; zipcode: string;
 };
 export const emptyFields = (): FormFields => ({ firstName: "", lastName: "", ownerName: "", ownerTel: "", province: "", farmName: "", name: "", microchip: "", sex: "", color: "", birthdayInput: "", fatherName: "", motherName: "", level: "จังหวัด", type: "", address: "", district: "", amphoe: "", zipcode: "" });
@@ -55,7 +57,7 @@ export function registrationAge(birth: string, cutoff: string | null, royal: boo
 }
 export function eligibleClasses(event: EventDetail, fields: FormFields) {
   const birth = parseCalendarInput(fields.birthdayInput).day;
-  if (!birth || !validBirthday(birth) || !fields.color) return [];
+  if (!birth || !validBirthday(birth) || (event.formKind === "royal" && !fields.color)) return [];
   try {
     const age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", fields.color);
     return getEligibleCompetitionClasses(age, event.catalogs.filter(c => c.level === fields.level).flatMap(c => c.labels));
@@ -66,7 +68,7 @@ export function catalogClass(event: EventDetail, fields: Pick<FormFields, "level
   const raw = event.catalogs.filter(c => c.level === fields.level).flatMap(c => c.labels).find(value => classDisplayName(value) === label);
   return raw ? parseCompetitionClass(raw) : null;
 }
-/** Match the web: province wins when normal age classes exist at both levels. */
+/** Legacy automatic assignment is retained for Royal; normal uses normalOptions. */
 export function automaticClass(event: EventDetail, fields: FormFields) {
   for (const level of ["จังหวัด", "ประเทศ"] as const) {
     const labels = eligibleClasses(event, { ...fields, level });
@@ -79,15 +81,34 @@ export function specialChoices(event: EventDetail, fields: FormFields) {
   return (["ประเทศ", "จังหวัด"] as const).flatMap(level => eligibleClasses(event, { ...fields, level })
     .filter(type => catalogClass(event, { level }, type)?.kind === "special").map(type => ({ level, type })));
 }
+/** Split eligible labels using their original encoded metadata, never their display text. */
+export function normalOptions(event: EventDetail, fields: FormFields): NormalClassOptions {
+  const at = (level: "ประเทศ" | "จังหวัด", kind: "age" | "special") => eligibleClasses(event, { ...fields, level })
+    .filter(label => catalogClass(event, { level }, label)?.kind === kind);
+  return { nationalTypes: at("ประเทศ", "age"), provinceTypes: at("จังหวัด", "age"), specialNationalTypes: at("ประเทศ", "special"), specialProvinceTypes: at("จังหวัด", "special") };
+}
+/** Old normal auto drafts stored province as an implicit default. Only unfrozen drafts migrate. */
+export function prepareRegistrationFields(event: EventDetail, fields: FormFields): FormFields {
+  const migrated = migrateOwnerFields(fields);
+  const explicitSpecial = migrated.classMode === "special" || (!migrated.classMode && catalogClass(event, migrated, migrated.type)?.kind === "special");
+  return reconcileClasses(event, event.formKind === "normal" && !migrated.normalSelectionVersion
+    ? { ...migrated, level: explicitSpecial ? migrated.level : "", type: explicitSpecial ? migrated.type : "" }
+    : migrated);
+}
 export function reconcileClasses(event: EventDetail, fields: FormFields, previous?: FormFields): FormFields {
-  // Web normal resets on chip/birthday; Royal recalculates only when its computed age changes.
+  if (event.formKind === "normal") {
+    const choice = suggestNormalSelection(fields, normalOptions(event, fields), previous?.level ?? fields.level);
+    const level = choice.level === "ประเทศ" || choice.level === "จังหวัด" ? choice.level : "";
+    return { ...fields, ...choice, level, normalSelectionVersion: 1,
+      classMode: catalogClass(event, { level }, choice.type)?.kind === "special" ? "special" : "auto" };
+  }
+  // Royal keeps its legacy selection behavior and computed-age reset.
   const age = (f: FormFields) => { try { return registrationAge(parseCalendarInput(f.birthdayInput).day!, event.ageCutoffDay, event.formKind === "royal", f.color); } catch { return null; } };
   const changed = previous && (event.formKind === "royal" ? age(fields) !== age(previous) : fields.microchip !== previous.microchip || fields.birthdayInput !== previous.birthdayInput);
   let classMode = changed || fields.classMode === "manual" ? "auto" : fields.classMode ?? (catalogClass(event, fields, fields.type)?.kind === "special" ? "special" : "auto");
   const specials = specialChoices(event, fields);
   if (classMode === "special") {
-    const entering = previous?.classMode !== "special" && fields.type === "";
-    const level = event.formKind === "normal" && entering && !specials.some(c => c.level === "จังหวัด") && specials.some(c => c.level === "ประเทศ") ? "ประเทศ" : fields.level;
+    const level = fields.level;
     const type = specials.some(c => c.level === level && c.type === fields.type) ? fields.type : "";
     // Preserve explicit mode but discard any stale choice; all-age manual mode is obsolete.
     return { ...fields, classMode, level, type };
@@ -121,7 +142,7 @@ export function buildRegistrationRequest(event: EventDetail, fields: FormFields,
   if (birthday.day > new Date(now.getTime() + 7 * 3600000).toISOString().slice(0, 10)) throw new Error("วันเกิดกระบือต้องไม่อยู่ในอนาคต");
   if (!fields.sex || !fields.color) throw new Error("กรุณาเลือกเพศและสีกระบือ");
   const buffaloAge = registrationAge(birthday.day, event.ageCutoffDay, event.formKind === "royal", fields.color);
-  if (buffaloAge > 1200 || !eligibleClasses(event, fields).includes(fields.type)) throw new Error("กรุณาเลือกรุ่นแข่งขันที่ตรงกับอายุและกติกาปัจจุบันของงาน");
+  if (!fields.level || buffaloAge > 1200 || !eligibleClasses(event, fields).includes(fields.type)) throw new Error("กรุณาเลือกรุ่นแข่งขันที่ตรงกับอายุและกติกาปัจจุบันของงาน");
   const clauses = agreementsFor(event);
   if (clauses.some(clause => agreements[clause.key] !== true)) throw new Error("กรุณาอ่านและยินยอมข้อตกลงทุกข้อก่อนส่งใบสมัคร");
   const payload: RegistrationRequest = { operationId, type: normalizeClassName(fields.type), level: fields.level, name: fields.name,

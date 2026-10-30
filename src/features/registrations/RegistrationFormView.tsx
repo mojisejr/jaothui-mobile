@@ -4,9 +4,10 @@ import type { EventDetail } from "@/types/events";
 import { EventButton } from "@/features/events/EventControls";
 import { eventDayLabel, parseCalendarInput } from "@/features/events/model";
 import { colors, radius, spacing } from "@/design/tokens";
-import { agreementsFor, automaticClass, catalogClass, classDescription, eligibleClasses, specialChoices, registrationAge, type FormFields } from "./model";
+import { agreementsFor, automaticClass, catalogClass, classDescription, normalOptions, specialChoices, registrationAge, type FormFields } from "./model";
 import { FormChoice, FormField, FormSelect, FormHeading, formStyles } from "./FormControls";
 import { ThaiBirthdayPicker } from "./ThaiBirthdayPicker";
+import { normalClassOptions } from "./normalLevels";
 import { validBirthday } from "./birthday";
 import { photoTitles, type PhotoSlot } from "./photos";
 export type RegistrationFormViewProps = {
@@ -21,11 +22,10 @@ export type RegistrationFormViewProps = {
 export function RegistrationFormView(props: RegistrationFormViewProps) {
   const { event, value, onChange, agreements, photos, pending, busy } = props;
   const locked = busy || !!pending;
-  const mode = value.classMode ?? (catalogClass(event, value, value.type)?.kind === "special" ? "special" : "auto");
   const automatic = automaticClass(event, value);
-  const classes = eligibleClasses(event, value).filter(label => catalogClass(event, value, label)?.kind === "special");
+  const classes = normalClassOptions(normalOptions(event, value), value.level);
   let age: number | null = null;
-  try { const birth = parseCalendarInput(value.birthdayInput).day; if (birth && validBirthday(birth) && value.color) age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", value.color); } catch { /* Invalid typed dates are validated on submit. */ }
+  try { const birth = parseCalendarInput(value.birthdayInput).day; if (birth && validBirthday(birth) && (event.formKind === "normal" || value.color)) age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", value.color); } catch { /* Invalid typed dates are validated on submit. */ }
   const field = (key: keyof FormFields, text: string) => onChange({ ...value, [key]: text });
   return <View>
     <Text style={formStyles.gold}>{event.formKind === "royal" ? "ROYAL COMPETITION" : "JAOTHUI COMPETITION"}</Text><Text style={formStyles.title}>ใบสมัครประกวด</Text><Text style={formStyles.body}>{event.name}</Text>
@@ -45,7 +45,7 @@ export function RegistrationFormView(props: RegistrationFormViewProps) {
     <Text style={formStyles.label}>เพศ</Text><View accessibilityRole="radiogroup" style={formStyles.choices}>{([['male', 'ผู้'], ['female', 'เมีย']] as const).map(([sex, label]) => <FormChoice key={sex} label={label} selected={value.sex === sex} disabled={locked} onPress={() => onChange({ ...value, sex })} />)}</View>
     <Text style={formStyles.label}>สี</Text><View accessibilityRole="radiogroup" style={formStyles.choices}>{([['black', 'ดำ'], ['albino', 'เผือก']] as const).map(([color, label]) => <FormChoice key={color} label={label} selected={value.color === color} disabled={locked} onPress={() => onChange({ ...value, color })} />)}</View>
     <ThaiBirthdayPicker value={value.birthdayInput} disabled={locked} onChange={text => field("birthdayInput", text)} />
-    <Text style={formStyles.gold}>{age === null ? "กรอกวันเกิดและสีเพื่อดูอายุและรุ่นแข่งขัน" : `อายุประกวด ${age} เดือน · ตัดอายุ ${eventDayLabel(event.ageCutoffDay)}`}</Text>
+    <Text style={formStyles.gold}>{age === null ? event.formKind === "normal" ? "กรอกวันเกิดเพื่อดูอายุและรุ่นแข่งขัน" : "กรอกวันเกิดและสีเพื่อดูอายุและรุ่นแข่งขัน" : `อายุประกวด ${age} เดือน · ตัดอายุ ${eventDayLabel(event.ageCutoffDay)}`}</Text>
     <Text style={formStyles.hint}>อายุและสิทธิ์รุ่นแข่งขันจะตรวจสอบอีกครั้งตามกติกาของงานก่อนบันทึก</Text>
     <FormHeading title="รุ่นแข่งขัน" subtitle="รุ่นปกติจัดตามอายุอัตโนมัติ รุ่นพิเศษต้องตรวจสอบคุณสมบัติเพิ่มเติมด้วยตนเอง" />
     {event.formKind === "royal" ? <>
@@ -54,12 +54,20 @@ export function RegistrationFormView(props: RegistrationFormViewProps) {
         {[...(automatic ? [automatic] : []), ...specialChoices(event, value)].map(choice => <View key={`${choice.level}-${choice.type}`}><FormChoice label={`ระดับ${choice.level} · ${choice.type}`} selected={value.level === choice.level && value.type === choice.type} disabled={locked} onPress={() => onChange({ ...value, ...choice, classMode: catalogClass(event, choice, choice.type)?.kind === "special" ? "special" : "auto" })} />{classDescription(event, choice, choice.type) ? <Text style={formStyles.hint}>{classDescription(event, choice, choice.type)}</Text> : null}</View>)}
       </View> : null}
     </> : <>
-      <View style={formStyles.choices}><FormChoice label="รุ่นปกติอัตโนมัติ" selected={mode === "auto"} disabled={locked} onPress={() => onChange({ ...value, classMode: "auto", type: "" })} />{specialChoices(event, value).length > 0 ? <FormChoice label="เลือกรุ่นพิเศษ" selected={mode === "special"} disabled={locked} onPress={() => onChange({ ...value, classMode: "special", type: "" })} /> : null}</View>
-      {mode === "auto" ? <Text style={formStyles.gold}>{automatic ? `ระดับ${automatic.level} · ${automatic.type}` : "ยังไม่มีรุ่นปกติที่ตรงกับข้อมูล กรุณาตรวจสอบวันเกิด เพศ สี หรือเลือกรุ่นพิเศษตามคุณสมบัติ"}</Text> : <>
-        <View accessibilityRole="radiogroup" style={formStyles.choices}>{(["จังหวัด", "ประเทศ"] as const).filter(level => specialChoices(event, value).some(c => c.level === level)).map(level => <FormChoice key={level} label={`ระดับ${level}`} selected={value.level === level} disabled={locked} onPress={() => onChange({ ...value, level, type: "" })} />)}</View>
-        <View accessibilityRole="radiogroup" style={styles.classChoices}>{classes.map(label => <View key={label}><FormChoice label={label} selected={value.type === label} disabled={locked} onPress={() => field("type", label)} />{classDescription(event, value, label) ? <Text style={formStyles.hint}>{classDescription(event, value, label)}</Text> : null}</View>)}</View>
-        {!classes.length ? <Text style={formStyles.hint}>ยังไม่มีรุ่นที่เลือกได้ กรุณาตรวจสอบวันเกิด เพศ สี ระดับ และกติกาของงาน</Text> : null}
-      </>}
+      <FormHeading title="ระดับการแข่งขัน *" subtitle="ระบบเลือกระดับประเทศและรุ่นตามอายุให้ก่อน หากต้องการสมัครระดับจังหวัดเปลี่ยนได้ที่นี่ ควายตัวเดียวสมัครได้ทั้งสองระดับ โดยส่งใบสมัครแยกแต่ละรายการ" />
+      <View accessibilityRole="radiogroup" accessibilityLabel="ระดับการแข่งขัน" style={formStyles.choices}>
+        {(["ประเทศ", "จังหวัด"] as const).map(level => <FormChoice key={level} label={level === "ประเทศ" ? "ระดับประเทศ" : "ระดับจังหวัด / ท้องถิ่น"} selected={value.level === level} disabled={locked} onPress={() => onChange({ ...value, level })} />)}
+      </View>
+      {!value.level ? <Text style={formStyles.hint}>เลือกระดับการแข่งขันก่อนเลือกรุ่น</Text> : [
+        { title: "รุ่นตามอายุ", labels: classes.regular }, { title: "รุ่นพิเศษ", labels: classes.special },
+      ].map(group => <View key={group.title}>
+        <FormHeading title={`${group.title} (${group.labels.length})`} subtitle={group.title === "รุ่นพิเศษ" ? "เลือกรุ่นพิเศษได้ตามคุณสมบัติ ทีมงานจะตรวจเงื่อนไขเพิ่มเติมตามประกาศ" : undefined} />
+        <View accessibilityRole="radiogroup" accessibilityLabel={group.title} style={styles.classChoices}>{group.labels.map(label => <View key={label}>
+          <FormChoice label={label.replace(/^\[SP\]\s*/, "")} accessibilityLabel={`${group.title}: ${label}`} selected={value.type === label} disabled={locked} onPress={() => field("type", label)} />
+          {classDescription(event, value, label) ? <Text style={formStyles.hint}>{classDescription(event, value, label)}</Text> : null}
+        </View>)}</View>
+        {!group.labels.length ? <Text style={formStyles.hint}>ยังไม่มี{group.title}ที่ตรงกับอายุในระดับนี้</Text> : null}
+      </View>)}
     </>}
     <FormField label="ชื่อพ่อพันธุ์" value={value.fatherName} disabled={locked} onChange={text => field("fatherName", text)} />
     <FormField label="ชื่อแม่พันธุ์" value={value.motherName} disabled={locked} onChange={text => field("motherName", text)} />

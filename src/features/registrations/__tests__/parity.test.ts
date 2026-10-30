@@ -32,12 +32,12 @@ describe("certificate DTO and class parity", () => {
     expect(automaticClass({ ...event, catalogs: [event.catalogs[0]] }, { ...filledFields, birthdayInput: "15/04/2567" })?.level).toBe("ประเทศ");
     expect(automaticClass({ ...event, catalogs: [{ level: "จังหวัด", labels: ["[SP] แม่ลูก"] }] }, filledFields)).toBeNull();
   });
-  it("preserves explicit special choice on sex/color edits, resets normal chip/birthday changes", () => {
+  it("preserves eligible normal choices on edits and clears incompatible choices", () => {
     const fields = { ...filledFields, classMode: "special" as const, type: "[SP] แม่ลูก" };
     expect(reconcileClasses(event, fields).type).toBe(fields.type);
     expect(reconcileClasses(event, { ...fields, ownerName: "edited" }, fields).type).toBe(fields.type);
     expect(reconcileClasses(event, { ...fields, color: "albino" }, fields).classMode).toBe("special");
-    expect(reconcileClasses(event, { ...fields, microchip: "different" }, fields).classMode).toBe("auto");
+    expect(reconcileClasses(event, { ...fields, microchip: "different" }, fields).type).toBe(fields.type);
     expect(reconcileClasses(event, { ...fields, birthdayInput: "" }, fields).type).toBe("");
     expect(reconcileClasses({ ...event, catalogs: [{ level: "จังหวัด", labels: [] }] }, fields).type).toBe("");
   });

@@ -1,4 +1,4 @@
-import { automaticClass, buildRegistrationRequest, agreementsFor, emptyFields, migrateOwnerFields, reconcileClasses, specialChoices, registrationActive, historyStatusLabel } from "../model";
+import { buildRegistrationRequest, agreementsFor, emptyFields, migrateOwnerFields, reconcileClasses, specialChoices, registrationActive, historyStatusLabel } from "../model";
 import { getProvinces, getAmphoeFromProvince, getDistrictsFromAmphoe } from "../addressHelper";
 import { createBuffaloLookup } from "../lookup";
 import { encodeCompetitionClass } from "../competitionClasses";
@@ -20,15 +20,15 @@ describe("consolidated Event source parity regressions", () => {
     expect(migrateOwnerFields({ ...legacy, ownerName: "ชื่อเดียว" } as unknown as typeof fields).lastName).toBe("");
     expect(migrateOwnerFields(filledFields)).toBe(filledFields);
   });
-  it("defaults normal special mode to national when only national specials qualify", () => {
+  it("shows national specials independently while retaining explicit province selection", () => {
     const before = reconcileClasses(event, fields);
-    expect(reconcileClasses(event, { ...before, classMode: "special", type: "" }, before)).toMatchObject({ classMode: "special", level: "ประเทศ", type: "" });
+    expect(reconcileClasses(event, { ...before, classMode: "special", type: "" }, before)).toMatchObject({ classMode: "auto", level: "จังหวัด", type: "ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน" });
     expect(specialChoices(event, fields)).toEqual([{ level: "ประเทศ", type: "[SP] ฟันแท้" }]);
   });
-  it("normal sex/color edits preserve chosen special but chip/birthday edits reset", () => {
+  it("normal sex/color and chip edits preserve a still-eligible special", () => {
     const before = { ...fields, level: "ประเทศ" as const, classMode: "special" as const, type: "[SP] ฟันแท้" };
     for (const patch of [{ sex: "male" as const }, { color: "albino" as const }]) expect(reconcileClasses(event, { ...before, ...patch }, before).type).toBe(before.type);
-    expect(reconcileClasses(event, { ...before, microchip: "short-id" }, before).type).toBe(automaticClass(event, before)?.type);
+    expect(reconcileClasses(event, { ...before, microchip: "short-id" }, before).type).toBe(before.type);
   });
   it("Royal combined choices retain explicit special until computed age changes and remove obsolete all-age mode", () => {
     const royal = { ...event, formKind: "royal" as const };

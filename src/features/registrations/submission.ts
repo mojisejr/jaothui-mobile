@@ -18,7 +18,11 @@ export function createSubmission(send: (payload: RegistrationRequest) => Promise
         if (!pending) pending = { payload: JSON.parse(JSON.stringify(makePayload())), state: "sending" };
         else if (pending.state === "rejected") throw new Error("กรุณาตรวจสอบกติกาและเลือกแก้ไขข้อมูลก่อนส่งใหม่");
         pending.state = "sending"; pending.error = undefined; changed();
-        try { return await send(pending.payload); }
+        try {
+          const result = await send(pending.payload);
+          if (typeof result?.registration?.id !== "string" || !result.registration.id) throw new Error("ยังยืนยันรหัสใบสมัครไม่ได้ กรุณาตรวจสอบคำขอเดิมอีกครั้ง");
+          return result;
+        }
         catch (error) {
           const definitive = error instanceof MobileApiError && ([400, 403, 413, 422].includes(error.status) || ["REGISTRATION_CLOSED", "EVENT_REVISION_CONFLICT"].includes(error.code));
           pending.state = definitive ? "rejected" : "uncertain";
