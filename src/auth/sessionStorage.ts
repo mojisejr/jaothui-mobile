@@ -4,26 +4,24 @@ import type {
   MobileBitkubNextSession,
   MobileSession,
 } from "@/types/mobile-api";
+import { advanceSessionGeneration, currentSessionGeneration, serializeAuthWrite } from "./sessionLifecycle";
+import { eraseOAuthIntent, readOAuthIntent, writeOAuthIntent, sessionIdentity } from "./oauthIntentStorage";
+
+import { MobileSessionStorageError, secureStorageCall, SECURE_STORAGE_ERROR_MESSAGE } from "./storageErrors";
+export { MobileSessionStorageError } from "./storageErrors";
 
 const SESSION_KEY = "jaothui.mobileSession.v1";
 
-type SecureStoreAdapter = {
+export type SecureStoreAdapter = {
   getItemAsync(key: string): Promise<string | null>;
   setItemAsync(key: string, value: string): Promise<void>;
   deleteItemAsync(key: string): Promise<void>;
   isAvailableAsync?: () => Promise<boolean>;
 };
 
-export class MobileSessionStorageError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "MobileSessionStorageError";
-  }
-}
-
 async function assertStorageAvailable(storage: SecureStoreAdapter) {
-  if (storage.isAvailableAsync && !(await storage.isAvailableAsync())) {
-    throw new MobileSessionStorageError("Secure session storage is not available on this device");
+  if (storage.isAvailableAsync && !(await secureStorageCall(() => storage.isAvailableAsync!()))) {
+    throw new MobileSessionStorageError(SECURE_STORAGE_ERROR_MESSAGE);
   }
 }
 
@@ -106,14 +104,37 @@ function toUnixSeconds(nowMs: number) {
 
 export async function saveMobileSession(
   session: MobileSession,
-  storage: SecureStoreAdapter = SecureStore
+  storage: SecureStoreAdapter = SecureStore,
+  guard?: { generation: number; flowId: string; expectedIdentity?: string }
 ) {
-  await assertStorageAvailable(storage);
-  await storage.setItemAsync(SESSION_KEY, JSON.stringify(session));
+  const generation = guard?.generation ?? advanceSessionGeneration();
+  return serializeAuthWrite(async () => {
+    await assertStorageAvailable(storage);
+    if (currentSessionGeneration() !== generation) throw new MobileSessionStorageError("Session changed while authentication was pending");
+    if (guard) {
+      const intent = await readOAuthIntent(storage);
+      if (intent?.flowId !== guard.flowId) throw new MobileSessionStorageError("Authentication intent is no longer current");
+      const raw = await secureStorageCall(() => storage.getItemAsync(SESSION_KEY));
+      const current = raw ? JSON.parse(raw) as MobileSession : null;
+      if (guard.expectedIdentity && sessionIdentity(current) !== guard.expectedIdentity) throw new MobileSessionStorageError("Account changed while authentication was pending");
+      if (currentSessionGeneration() !== generation) throw new MobileSessionStorageError("Session changed while authentication was pending");
+      if (session.identity.sessionVersion !== 2) throw new MobileSessionStorageError("Expected JAOTHUI Account");
+      // Persist a bounded receipt before the session. A killed process or failed
+      // session write can safely retry; a saved session can recover its target.
+      await writeOAuthIntent({ ...intent, status: "completed", completedAccountId: session.identity.accountId }, storage);
+    }
+    await secureStorageCall(() => storage.setItemAsync(SESSION_KEY, JSON.stringify(session)));
+    // A failed native session write must not erase a still-recoverable intent.
+    if (!guard) await eraseOAuthIntent(storage);
+  });
 }
 
 export async function clearMobileSession(storage: SecureStoreAdapter = SecureStore) {
-  await storage.deleteItemAsync(SESSION_KEY);
+  advanceSessionGeneration();
+  return serializeAuthWrite(async () => {
+    await secureStorageCall(() => storage.deleteItemAsync(SESSION_KEY));
+    await eraseOAuthIntent(storage);
+  });
 }
 
 export async function loadMobileSession(
@@ -121,26 +142,20 @@ export async function loadMobileSession(
   nowMs = Date.now()
 ): Promise<MobileSession | null> {
   await assertStorageAvailable(storage);
-  const raw = await storage.getItemAsync(SESSION_KEY);
+  const raw = await secureStorageCall(() => storage.getItemAsync(SESSION_KEY));
   if (!raw) return null;
 
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isMobileSession(parsed)) {
-      await clearMobileSession(storage);
-      return null;
-    }
-
-    if (parsed.expiresAt <= toUnixSeconds(nowMs)) {
-      await clearMobileSession(storage);
-      return null;
-    }
-
-    return parsed;
-  } catch {
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw) as unknown; }
+  catch {
     await clearMobileSession(storage);
     return null;
   }
+  if (!isMobileSession(parsed) || parsed.expiresAt <= toUnixSeconds(nowMs)) {
+    await clearMobileSession(storage);
+    return null;
+  }
+  return parsed;
 }
 
 export async function loadMobileSessionToken(storage: SecureStoreAdapter = SecureStore) {

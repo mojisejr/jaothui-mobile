@@ -2,6 +2,7 @@ import * as WebBrowser from "expo-web-browser";
 import { API_BASE_URL, mobilePost } from "@/api/client";
 import { saveMobileSession } from "@/auth/sessionStorage";
 import type { MobileLineAccountSession } from "@/types/mobile-api";
+import { oauthCompletion } from "./oauthCompletion";
 
 export const LINE_ACCOUNT_RETURN_TO = "jaothui://oauth/callback";
 const SESSION_ENDPOINT = "/api/mobile/v2/auth/line/session";
@@ -14,9 +15,10 @@ export type LineCallbackParseResult =
       message: string;
     };
 
-export function buildLineAccountAuthUrl(returnTo = LINE_ACCOUNT_RETURN_TO) {
+export function buildLineAccountAuthUrl(returnTo = LINE_ACCOUNT_RETURN_TO, clientFlowId?: string) {
   const url = new URL("/oauth/mobile/line/start", API_BASE_URL);
   url.searchParams.set("returnTo", returnTo);
+  if (clientFlowId) url.searchParams.set("clientFlowId", clientFlowId);
   return url.toString();
 }
 
@@ -47,6 +49,7 @@ export function parseLineAccountCallbackUrl(url: string): LineCallbackParseResul
         message: "OAuth callback is not a LINE account callback",
       };
     }
+    if (parsed.searchParams.get("purpose") === "link") return { ok: false, reason: "invalid_callback", message: "LINE attach requires the current Account intent" };
 
     const handoff = parsed.searchParams.get("handoff")?.trim();
     if (!handoff) {
@@ -77,11 +80,13 @@ export async function completeLineAccountHandoff(handoff: string) {
   return session;
 }
 
-export async function openLineAccountAuthSession() {
-  const authUrl = buildLineAccountAuthUrl();
+export async function openLineAccountAuthSession(eventId?: string) {
+  const begun = await oauthCompletion.begin("login", eventId ?? null);
+  const authUrl = buildLineAccountAuthUrl(LINE_ACCOUNT_RETURN_TO, begun.intent.flowId);
   const result = await WebBrowser.openAuthSessionAsync(authUrl, LINE_ACCOUNT_RETURN_TO);
 
   if (result.type !== "success") {
+    await oauthCompletion.cancel(begun.intent.flowId);
     return {
       ok: false as const,
       reason: result.type,
@@ -89,11 +94,8 @@ export async function openLineAccountAuthSession() {
     };
   }
 
-  const callback = parseLineAccountCallbackUrl(result.url);
-  if (!callback.ok) return callback;
-
-  const session = await completeLineAccountHandoff(callback.handoff);
-  return { ok: true as const, session };
+  const completion = await oauthCompletion.complete(result.url, begun.intent.flowId);
+  return { ok: true as const, session: completion.session as MobileLineAccountSession, target: completion.target };
 }
 
 WebBrowser.maybeCompleteAuthSession();

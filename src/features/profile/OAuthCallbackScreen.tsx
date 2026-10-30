@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { StateBlock } from "@/components/StateBlock";
 import {
   completeBitkubNextHandoff,
   completeBitkubNextWalletLinkHandoff,
 } from "@/auth/bitkubNext";
-import { completeLineAccountHandoff } from "@/auth/lineAccount";
+import { oauthCompletion } from "@/auth/oauthCompletion";
 import { loadMobileSession } from "@/auth/sessionStorage";
 
 type CallbackState = "redeeming" | "missing" | "failed";
@@ -18,14 +18,37 @@ export function OAuthCallbackScreen() {
     error?: string | string[];
     provider?: string | string[];
     purpose?: string | string[];
+    clientFlowId?: string | string[];
+    intentId?: string | string[];
   }>();
   const [state, setState] = useState<CallbackState>("redeeming");
+  const [attempt, setAttempt] = useState(0);
+  const callbackUrl = (() => {
+    const url = new URL("jaothui://oauth/callback");
+    for (const key of ["handoff", "error", "provider", "purpose", "clientFlowId", "intentId"] as const) {
+      const value = params[key];
+      if (typeof value === "string") url.searchParams.set(key, value);
+      else if (Array.isArray(value) && value.length === 1) url.searchParams.set(key, value[0]);
+    }
+    return url.toString();
+  })();
+  const scalar = (value: string | string[] | undefined) => typeof value === "string" ? value : value?.length === 1 ? value[0] : undefined;
+  const handoff = scalar(params.handoff), providerError = scalar(params.error), provider = scalar(params.provider), purpose = scalar(params.purpose);
+  const leave = async () => {
+    if (provider === "line") router.replace(await oauthCompletion.exit(callbackUrl) as Href);
+    else router.replace("/profile");
+  };
 
   useEffect(() => {
-    const handoff = Array.isArray(params.handoff) ? params.handoff[0] : params.handoff;
-    const providerError = Array.isArray(params.error) ? params.error[0] : params.error;
-    const provider = Array.isArray(params.provider) ? params.provider[0] : params.provider;
-    const purpose = Array.isArray(params.purpose) ? params.purpose[0] : params.purpose;
+    let active = true;
+    setState("redeeming");
+    // Attach must be dispatched before the legacy LINE login parser. Both
+    // native URL routing and openAuthSession use this SAME persisted coordinator.
+    if (provider === "line") {
+      oauthCompletion.complete(callbackUrl).then(result => { if (active) router.replace(result.target as Href); })
+        .catch(() => { if (active) setState("failed"); });
+      return () => { active = false; };
+    }
 
     if (providerError || !handoff) {
       setState("missing");
@@ -33,13 +56,7 @@ export function OAuthCallbackScreen() {
     }
 
     const verifiedHandoff = handoff;
-    let active = true;
     async function completeHandoff() {
-      if (provider === "line") {
-        await completeLineAccountHandoff(verifiedHandoff);
-        return;
-      }
-
       if (provider === "bitkub-next" && purpose === "link") {
         const session = await loadMobileSession();
         if (
@@ -72,16 +89,16 @@ export function OAuthCallbackScreen() {
     return () => {
       active = false;
     };
-  }, [params.error, params.handoff, params.provider, params.purpose, router]);
+  }, [providerError, handoff, provider, purpose, callbackUrl, router, attempt]);
 
   if (state === "missing") {
     return (
       <Screen activeTab="profile">
         <StateBlock
           title="เชื่อมต่อไม่สำเร็จ"
-          message="ไม่พบ handoff ที่ถูกต้องจากระบบยืนยันตัวตน กรุณากลับไปเริ่มใหม่"
+          message="ไม่พบข้อมูลยืนยันบัญชี กรุณากลับไปเริ่มเข้าสู่ระบบใหม่"
           actionLabel="กลับโปรไฟล์"
-          onAction={() => router.replace("/profile")}
+          onAction={() => { void leave(); }}
         />
       </Screen>
     );
@@ -91,18 +108,19 @@ export function OAuthCallbackScreen() {
     return (
       <Screen activeTab="profile">
         <StateBlock
-          title="บันทึก session ไม่สำเร็จ"
-          message="แอปไม่สามารถแลก handoff เป็น JAOTHUI session ได้ กรุณาลองใหม่อีกครั้ง"
-          actionLabel="กลับโปรไฟล์"
-          onAction={() => router.replace("/profile")}
+          title="ยืนยันบัญชีไม่สำเร็จ"
+          message="ขั้นตอนนี้อาจหมดอายุหรือเครือข่ายยังไม่พร้อม บัญชีเดิมจะไม่ถูกแทนที่โดยข้อมูลที่ไม่ตรงกัน"
+          actionLabel="ลองยืนยันอีกครั้ง"
+          onAction={() => setAttempt(value => value + 1)}
         />
+        <StateBlock title="กลับไปตรวจสอบข้อมูล" actionLabel="กลับหน้าก่อนเข้าสู่ระบบ" onAction={() => { void leave(); }} />
       </Screen>
     );
   }
 
   return (
     <Screen activeTab="profile">
-      <StateBlock title="กำลังเชื่อมต่อบัญชี" message="กำลังยืนยัน session กับ JAOTHUI" />
+      <StateBlock title="กำลังเชื่อมต่อบัญชี" message="กำลังยืนยันการเข้าสู่ระบบกับ JAOTHUI" />
     </Screen>
   );
 }
