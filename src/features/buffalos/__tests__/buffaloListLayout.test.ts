@@ -1,4 +1,5 @@
 import React from "react";
+import * as Clipboard from "expo-clipboard";
 import { AccessibilityInfo, Dimensions, FlatList, Image, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { BuffaloListScreen } from "../BuffaloListScreen";
 import { BuffaloCard } from "@/components/BuffaloCard";
@@ -8,6 +9,7 @@ import { buffaloCardFooterHeight } from "@/components/buffaloCardLayout";
 import { colors, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 
+jest.mock("expo-clipboard", () => ({ setStringAsync: jest.fn(async () => true) }));
 jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 jest.mock("@/api/jaothui", () => ({ getBuffalos: jest.fn() }));
 jest.mock("@/photos/usePhotoFreshness", () => ({ usePhotoFreshness: jest.fn(() => mockPhotos) }));
@@ -116,8 +118,14 @@ describe("real virtualized list parent and natural card extent", () => {
     await renderer.act(() => { jest.advanceTimersByTime(400); });
     await renderer.act(async () => { jest.advanceTimersByTime(0); await Promise.resolve(); });
     expect(getBuffalos).toHaveBeenLastCalledWith(expect.objectContaining({ search: "ค้นหา", page: 1 }));
-    const element = list().props.renderItem({ item: items[0] });
-    element.props.onPress(); expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/certs/[microchip]", params: { microchip: items[0].microchip } });
+    await renderer.act(() => cards()[0].findByProps({ testID: "card-image-navigation" }).props.onPress());
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/certs/[microchip]", params: { microchip: items[0].microchip } });
+    mockRouter.push.mockClear();
+    const image = cards()[0].findByType(Image), beforeCopyRequests = (getBuffalos as jest.Mock).mock.calls.length;
+    await renderer.act(async () => { await cards()[0].findByProps({ accessibilityLabel: `คัดลอกไมโครชิป ${items[0].microchip}` }).props.onPress(); });
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(items[0].microchip);
+    expect(mockRouter.push).not.toHaveBeenCalled(); expect(mockPhotos.refresh).not.toHaveBeenCalled();
+    expect(getBuffalos).toHaveBeenCalledTimes(beforeCopyRequests); expect(cards()[0].findByType(Image)).toBe(image);
     list().props.onRefresh(); expect(mockPhotos.refresh).toHaveBeenCalledTimes(1);
   });
 

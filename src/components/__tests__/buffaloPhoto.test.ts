@@ -9,6 +9,7 @@ import { PHOTO_CANDIDATE_TIMEOUT_MS } from "@/photos/candidateQueue";
 import { buffaloSex } from "@/utils/buffaloSex";
 import { buffaloCardColumns, buffaloCardFooterHeight } from "../buffaloCardLayout";
 
+jest.mock("expo-clipboard", () => ({ setStringAsync: jest.fn(async () => true) }));
 // jest-expo already supplies this renderer; no application dependency is added.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const renderer = require("react-test-renderer") as {
@@ -124,7 +125,7 @@ describe("mounted native complete buffalo photo", () => {
     expect(rendered).toContain("91 เดือน");
     expect(rendered).toContain(buffalo.name);
     expect(rendered).toContain(buffalo.microchip);
-    renderer.act(() => tree.root.props.onPress());
+    renderer.act(() => tree.root.findByProps({ testID: "card-image-navigation" }).props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
@@ -271,7 +272,7 @@ describe("mounted native complete buffalo photo", () => {
     renderer.act(() => {
       tree.root.findByProps({ accessibilityLabel: "ลองโหลดภาพ ฟ้าประทาน อีกครั้ง" }).props.onPress(event);
       // Model native bubbling: without stopPropagation the containing card would navigate.
-      if (!stopped) tree.root.props.onPress();
+      if (!stopped) tree.root.findByProps({ testID: "card-image-navigation" }).props.onPress();
     });
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(onPress).not.toHaveBeenCalled();
