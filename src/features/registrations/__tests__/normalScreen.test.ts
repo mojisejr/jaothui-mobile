@@ -3,15 +3,16 @@ import { RegistrationScreen } from "../RegistrationScreen";
 import { RegistrationFormView, type RegistrationFormViewProps } from "../RegistrationFormView";
 import { RegistrationDetailView } from "../RegistrationDetailView";
 import { eventDraft } from "../drafts";
-import { agreementsFor, buildRegistrationRequest } from "../model";
+import { agreementsFor, buildRegistrationRequest, emptyFields } from "../model";
+import { encodeCompetitionClass } from "../competitionClasses";
 import type { RegistrationRequest, RegistrationResult } from "@/types/events";
 import type { MobileAppleAccountSession } from "@/types/mobile-api";
 import { normalEvent, filledFields, registration } from "./fixtures";
 let mockSession: MobileAppleAccountSession | null;
-const mockGet = jest.fn(), mockSend = jest.fn(), mockPrivate = jest.fn(), mockSame = jest.fn(), mockUUID = jest.fn();
+const mockGet = jest.fn(), mockSend = jest.fn(), mockPrivate = jest.fn(), mockSame = jest.fn(), mockUUID = jest.fn(), mockLookup = jest.fn();
 jest.mock("expo-router", () => ({ useFocusEffect: (callback: () => (() => void)) => mockUseEffect(callback, [callback]), useRouter: () => ({ replace: jest.fn() }), useLocalSearchParams: () => ({ eventId: "fixture-event" }) }));
 jest.mock("expo-crypto", () => ({ randomUUID: () => mockUUID() }));
-jest.mock("@/api/events", () => ({ getEventDetail: () => mockGet(), submitEventRegistration: (...args: unknown[]) => mockSend(...args), getEventMember: jest.fn(), getRegistrationBuffalo: jest.fn(), uploadEventImage: jest.fn() }));
+jest.mock("@/api/events", () => ({ getEventDetail: () => mockGet(), submitEventRegistration: (...args: unknown[]) => mockSend(...args), getEventMember: jest.fn(), getRegistrationBuffalo: (...args: unknown[]) => mockLookup(...args), uploadEventImage: jest.fn() }));
 jest.mock("../privateRequest", () => ({ eventPrivateRequest: () => mockPrivate() }));
 jest.mock("../customer", () => ({ sameCustomer: (...args: unknown[]) => mockSame(...args), eventAccountError: (error: Error) => error.message }));
 jest.mock("../nativePhotos", () => ({ selectApplicantPhoto: jest.fn(), normalizeApplicantPhoto: jest.fn(), readApplicantBytes: jest.fn() }));
@@ -23,6 +24,11 @@ jest.mock("@/components/Screen", () => ({ Screen: ({ children }: { children: Rea
 const renderer = require("react-test-renderer") as { act: (callback: () => void | Promise<void>) => Promise<void>; create: (element: React.ReactElement) => { root: TestNode; unmount: () => void; toJSON: () => unknown } };
 type TestNode = { props: { onPress: () => void }; findByProps: (props: Record<string, unknown>) => TestNode; findByType: (type: unknown) => { props: unknown }; findAllByType: (type: unknown) => TestNode[] };
 const event = { ...normalEvent, catalogs: [normalEvent.catalogs[0], { ...normalEvent.catalogs[0], level: "ประเทศ" as const }] };
+const ageClass = (name: string, minMonths: number, maxMonths: number) => encodeCompetitionClass({ name, kind: "age", minMonths, maxMonths, minInclusive: false, group: "", criteria: "" });
+const reportedEvent = { ...normalEvent, ageCutoffDay: "2026-11-23", catalogs: [
+  { level: "ประเทศ" as const, labels: [ageClass("ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน", 24, 36)] },
+  { level: "จังหวัด" as const, labels: [ageClass("ควายรุ่น มากกว่า 18–24 เดือน", 18, 24), ageClass("ลูกควาย มากกว่า 10–18 เดือน", 10, 18)] },
+] };
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; };
 describe("mounted normal controller rebinding", () => {
   let tree: ReturnType<typeof renderer.create>;
@@ -41,6 +47,28 @@ describe("mounted normal controller rebinding", () => {
   const form = () => tree.root.findByType(RegistrationFormView).props as RegistrationFormViewProps;
   const mount = async () => { await renderer.act(async () => { tree = renderer.create(React.createElement(RegistrationScreen)); }); };
   const press = async (label: string) => { await renderer.act(async () => { tree.root.findByProps({ accessibilityLabel: label, accessibilityRole: "button" }).props.onPress(); }); };
+  it("selects the country 24–36 class after a fresh microchip lookup for the reported 32-month animal", async () => {
+    mockGet.mockResolvedValue(reportedEvent);
+    eventDraft(mockSession!.identity.accountId, event.id).fields = emptyFields();
+    mockLookup.mockResolvedValue({ buffalo: { name: "กระบือทดสอบ", sex: "female", color: "black", birthday: "2024-04-15", birthdate: null } });
+    await mount();
+    await renderer.act(async () => form().onChange({ ...form().value, microchip: "synthetic-chip" }));
+    await renderer.act(async () => form().onLookup());
+    expect(form().value).toMatchObject({ level: "ประเทศ", type: "ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน", birthdayInput: "15/04/2567" });
+    expect(mockLookup).toHaveBeenCalledWith("current", "synthetic-chip"); expect(mockSend).not.toHaveBeenCalled();
+  });
+  it("preserves an explicit province choice on lookup and offers a clear switch without changing the level silently", async () => {
+    mockGet.mockResolvedValue(reportedEvent);
+    eventDraft(mockSession!.identity.accountId, event.id).fields = emptyFields();
+    mockLookup.mockResolvedValue({ buffalo: { name: "กระบือทดสอบ", sex: "female", color: "black", birthday: "2024-04-15", birthdate: null } });
+    await mount();
+    await renderer.act(async () => form().onChange({ ...form().value, level: "จังหวัด", microchip: "synthetic-chip" }));
+    await renderer.act(async () => form().onLookup());
+    expect(form().value).toMatchObject({ level: "จังหวัด", type: "", birthdayInput: "15/04/2567" });
+    expect(JSON.stringify(tree.toJSON())).toContain("งานนี้ไม่มีรุ่น");
+    await press("ดูรุ่นระดับประเทศ");
+    expect(form().value).toMatchObject({ level: "ประเทศ", type: "ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน" });
+  });
   it("rebinds after confirmed success and sends a second level with a fresh ID, retaining first receipt/history action", async () => {
     await mount(); const stale = form();
     await renderer.act(async () => stale.onSubmit());
