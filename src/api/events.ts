@@ -40,6 +40,9 @@ export function getEventRegistrations(token: string, cursor?: string, period: "a
 export function getEventRegistration(token: string, id: string) {
   return mobileGetWithAuth<RegistrationDetail>(`/api/mobile/v2/event-registrations/${encodeURIComponent(id)}`, token);
 }
+export function getEventRegistrationPass(token: string, id: string) {
+  return mobilePostWithAuth<import("@/types/events").RegistrationPass>(`/api/mobile/v2/event-registrations/${encodeURIComponent(id)}/pass`, {}, token);
+}
 export function submitEventRegistration(token: string, eventId: string, payload: RegistrationRequest) {
   return mobilePostWithAuth<RegistrationResult>(`/api/mobile/v2/events/${encodeURIComponent(eventId)}/registrations`, payload, token);
 }

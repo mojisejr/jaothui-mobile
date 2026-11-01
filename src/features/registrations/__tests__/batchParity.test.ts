@@ -58,7 +58,7 @@ describe("consolidated Event source parity regressions", () => {
   it("uses inclusive Bangkok end day for active/past and normal ended label, retaining Royal approval labels", () => {
     expect(registrationActive({ ...registration, event: { ...registration.event, endDay: "2026-10-29" } }, new Date("2026-10-29T16:59:59Z"))).toBe(true);
     expect(registrationActive({ ...registration, event: { ...registration.event, endDay: "2026-10-29" } }, new Date("2026-10-29T17:00:00Z"))).toBe(false);
-    expect(historyStatusLabel(registration)).toBe("จบงานแล้ว");
-    expect(historyStatusLabel({ ...registration, status: "rejected" })).toBe("ไม่ผ่านการพิจารณา");
+    expect(historyStatusLabel(registration)).toBe("สมัครสำเร็จ");
+    expect(historyStatusLabel({ ...registration, status: "rejected" })).toBe("ไม่ผ่านการอนุมัติ");
   });
 });

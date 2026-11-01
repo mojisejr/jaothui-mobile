@@ -3,6 +3,8 @@ export const colors = {
   surface: "#121212",
   surfaceRaised: "#1a1a1a",
   foreground: "#f5f5f5",
+  qrForeground: "#000000",
+  qrBackground: "#ffffff",
   muted: "#a3a3a3",
   gold: "#d6b15f",
   goldHover: "#e3c77a",

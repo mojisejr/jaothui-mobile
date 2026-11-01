@@ -1,38 +1,55 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { getEventRegistrations } from "@/api/events";
-import type { RegistrationHistory, RegistrationStatus } from "@/types/events";
+import type { ApplicantRegistrationStatus, RegistrationHistory, RegistrationStatus, RegistrationSummary } from "@/types/events";
 import { spacing } from "@/design/tokens";
 import { Screen } from "@/components/Screen";
 import { Skeleton } from "@/components/Skeleton";
-import { useEventResource } from "@/features/events/useEventResource";
 import { RegistrationHistoryView } from "./RegistrationHistoryView";
+import { ApplicantQrPanel } from "./ApplicantQrPanel";
 import { CustomerGate } from "./CustomerGate";
 import { eventPrivateRequest } from "./privateRequest";
 import { eventAccountError, sameCustomer } from "./customer";
+import { useRegistrationResource } from "./useRegistrationResource";
+import { applicantTime } from "./applicantStatus";
 import type { HistoryPeriod } from "./model";
+import { EventButton } from "@/features/events/EventControls";
 import { FormChoice, FormSelect, formStyles } from "./FormControls";
 export function RegistrationHistoryScreen() {
   const [period, setPeriod] = useState<HistoryPeriod>("active"), [eventName, setEventName] = useState("");
-  const router = useRouter(), loader = useCallback(() => eventPrivateRequest(session => getEventRegistrations(session.sessionToken, undefined, period, eventName)), [period, eventName]), resource = useEventResource(loader);
-  const [extra, setExtra] = useState<RegistrationHistory | null>(null), [filter, setFilter] = useState<RegistrationStatus | "all">("all"), [paging, setPaging] = useState(false), [problem, setProblem] = useState<string | null>(null);
+  // Refresh only the pages already requested, retaining pagination and current statuses.
+  const pages = useMemo(() => ({ count: 1, period, eventName }), [period, eventName]);
+  const router = useRouter();
+  const loader = useCallback(() => eventPrivateRequest(async session => {
+    let history = await getEventRegistrations(session.sessionToken, undefined, period, eventName);
+    for (let page = 1; page < pages.count && history.nextCursor; page++) {
+      const next = await getEventRegistrations(session.sessionToken, history.nextCursor, period, eventName);
+      history = { ...next, items: [...history.items, ...next.items.filter(item => !history.items.some(old => old.id === item.id))] };
+    }
+    return history;
+  }), [period, eventName, pages]);
+  const resource = useRegistrationResource(loader, 30000);
+  const [filter, setFilter] = useState<ApplicantRegistrationStatus | RegistrationStatus | "all">("all"), [paging, setPaging] = useState(false), [problem, setProblem] = useState<string | null>(null), [selected, setSelected] = useState<RegistrationSummary | null>(null);
   const lock = useRef(false), version = useRef(0), current = useRef(resource.data); current.current = resource.data;
-  useEffect(() => { version.current++; lock.current = false; setExtra(null); setPaging(false); setProblem(null); }, [resource.data]);
-  useFocusEffect(useCallback(() => () => { version.current++; }, []));
-  const history = extra ?? resource.data?.value;
-  const eventNames = resource.data?.value.eventNames ?? [];
+  useEffect(() => { version.current++; lock.current = false; setPaging(false); setProblem(null); if (!resource.data) setSelected(null); }, [resource.data]);
+  useFocusEffect(useCallback(() => () => { version.current++; setSelected(null); }, []));
+  const history = resource.data?.value;
+  const eventNames = history?.eventNames ?? [];
   const more = async () => {
     if (lock.current || !history?.nextCursor || !resource.data) return;
     lock.current = true; setPaging(true); setProblem(null); const request = ++version.current, data = resource.data;
     try {
       const next = await getEventRegistrations(data.session.sessionToken, history.nextCursor, period, eventName);
       if (request !== version.current || current.current !== data || !await sameCustomer(data.session)) return;
-      setExtra({ ...next, items: [...history.items, ...next.items.filter(item => !history.items.some(old => old.id === item.id))] });
+      const combined: RegistrationHistory = { ...next, items: [...history.items, ...next.items.filter(item => !history.items.some(old => old.id === item.id))] };
+      if (resource.replace(data, combined)) pages.count++;
     } catch (failure) { if (request === version.current) setProblem(eventAccountError(failure)); }
     finally { if (request === version.current) { lock.current = false; setPaging(false); } }
   };
-  return <Screen activeTab="profile" scroll={false}><View style={{ paddingHorizontal: spacing.screenX }}><Pressable accessibilityRole="button" onPress={() => router.replace("/profile")} style={formStyles.back}><Text style={formStyles.gold}>← โปรไฟล์</Text></Pressable><Text style={formStyles.title}>ประวัติการสมัคร</Text><View style={formStyles.choices}>{(["active", "past", "all"] as const).map(p => <FormChoice key={p} label={p === "active" ? "กิจกรรมปัจจุบัน" : p === "past" ? "กิจกรรมที่ผ่านมา" : "ทุกกิจกรรม"} selected={period === p} onPress={() => setPeriod(p)} />)}</View><FormSelect label="ชื่องาน" value={eventName} options={["", ...eventNames]} disabled={resource.status !== "success"} emptyLabel="ทั้งหมด" onChange={setEventName} /></View>
-    {resource.status === "loading" ? <Skeleton variant="card" /> : resource.status === "error" ? <View style={{ paddingHorizontal: spacing.screenX }}><CustomerGate error={resource.error} retry={resource.reload} /></View> : history ? <RegistrationHistoryView period={period} eventName={eventName} items={history.items} filter={filter} onFilter={setFilter} onOpen={id => router.push({ pathname: "/registrations/[id]", params: { id } })} onMore={() => { void more(); }} hasMore={!!history.nextCursor} loadingMore={paging} error={problem} /> : null}
+  return <Screen activeTab="profile" scroll={false}><View style={{ paddingHorizontal: spacing.screenX }}><Pressable accessibilityRole="button" onPress={() => router.replace("/profile")} style={formStyles.back}><Text style={formStyles.gold}>← โปรไฟล์</Text></Pressable><Text style={formStyles.title}>ประวัติการสมัคร</Text><View style={formStyles.choices}>{(["active", "past", "all"] as const).map(p => <FormChoice key={p} label={p === "active" ? "กิจกรรมปัจจุบัน" : p === "past" ? "กิจกรรมที่ผ่านมา" : "ทุกกิจกรรม"} selected={period === p} onPress={() => setPeriod(p)} />)}</View><FormSelect label="ชื่องาน" value={eventName} options={["", ...eventNames]} disabled={resource.status !== "success"} emptyLabel="ทั้งหมด" onChange={setEventName} />
+    {history ? <><Text style={formStyles.hint}>ข้อมูลล่าสุด {applicantTime(resource.updatedAt)} (เวลาไทย)</Text><EventButton secondary label={resource.refreshing ? "กำลังโหลด…" : "โหลดข้อมูลล่าสุด"} disabled={resource.refreshing || paging} onPress={() => { void resource.reload(); }} />{resource.error ? <Text accessibilityRole="alert" style={formStyles.error}>โหลดข้อมูลล่าสุดไม่สำเร็จ ข้อมูลที่แสดงอาจยังไม่เป็นปัจจุบัน กรุณาเชื่อมต่อแล้วลองใหม่</Text> : null}</> : null}</View>
+    {resource.status === "loading" ? <Skeleton variant="card" /> : resource.status === "error" ? <View style={{ paddingHorizontal: spacing.screenX }}><CustomerGate error={resource.error!} retry={() => { void resource.reload(); }} /></View> : history ? <RegistrationHistoryView period={period} eventName={eventName} items={history.items} filter={filter} onFilter={setFilter} onOpen={id => router.push({ pathname: "/registrations/[id]", params: { id } })} onQr={setSelected} onMore={() => { void more(); }} hasMore={!!history.nextCursor} loadingMore={paging} error={problem} /> : null}
+    {selected && resource.data ? <ApplicantQrPanel key={selected.id} application={selected} onClose={() => setSelected(null)} onUpdated={() => { void resource.reload(); }} /> : null}
   </Screen>;
 }

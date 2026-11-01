@@ -455,3 +455,22 @@ The stutter gate is binding:
 - RN Web evidence is advisory/regression proof; Samsung Flip7 Expo Go remains the acceptance device
   for final mobile feel.
 - Home count-up acceptance separates deterministic/RN Web checks from native installed runtime observation: a named iOS simulator JAOTHUI dev-client can prove iOS Native Eye only; Expo Go cannot substitute for dev-client/packaging proof. Android native runtime and physical performance remain pending until observed, even if EAS packaging succeeds.
+
+## Applicant history and per-class QR
+
+Event registration uses curated `/api/mobile/v2/*` customer endpoints alongside existing v1 public
+pedigree endpoints. Existing account sessions and linked LINE identity remain the auth boundary;
+provider tokens and backend credentials never belong in the app.
+
+History keeps compact virtualized cards with independent details and QR actions. Registration result,
+event period and staff arrival are separate facts. Unknown event types require review. A safe-area
+native QR panel identifies the animal/event/class, renders a local black-on-white quiet-zone QR,
+and provides close/manual refresh, recorded Thai time and explicit stale/offline feedback. Staff
+uses their ordinary camera and existing Dashboard; the applicant app cannot confirm or undo arrival.
+Only focused foreground history/panels refresh (30s/10s); background/logout/route changes invalidate
+private results. QR packaging uses Expo54-compatible SVG; no camera permission is added.
+
+For this owner-approved parity batch, automated/static/compatibility/export gates are the agent's
+proof. RN Web/manual simulator playtesting is excluded by owner instruction. Installed QR readability,
+actual camera/login return, safe areas and native feel remain owner acceptance after a separately
+authorized internal build. Export success alone never closes Native Eye.

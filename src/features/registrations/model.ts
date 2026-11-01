@@ -5,6 +5,7 @@ import { validBirthday } from "./birthday";
 import { getAmphoeFromProvince, getDistrictsFromAmphoe } from "./addressHelper";
 import { eventAgreements } from "./agreements";
 import { suggestNormalSelection, type NormalClassOptions } from "./normalLevels";
+import { applicantStatus, applicantStatusLabels } from "./applicantStatus";
 
 export type FormFields = {
   firstName: string; lastName: string; ownerName: string; ownerTel: string; province: string; farmName: string; name: string; microchip: string;
@@ -165,5 +166,6 @@ export function registrationActive(row: import("@/types/events").RegistrationSum
   return !!row.event.endDay && row.event.endDay.slice(0, 10) >= today;
 }
 export function historyStatusLabel(row: import("@/types/events").RegistrationSummary) {
-  return row.status === "registered" && !registrationActive(row) ? "จบงานแล้ว" : registrationStatusLabel[row.status];
+  if (row.statusRefreshPending) return "บันทึกใบสมัครเรียบร้อยแล้ว กำลังรอโหลดสถานะล่าสุด";
+  return applicantStatusLabels[applicantStatus(row)];
 }

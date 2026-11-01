@@ -1,4 +1,4 @@
-import { enrollEventMember, uploadEventImage, submitEventRegistration, getEventRegistrations, getEventRegistration } from "../events";
+import { enrollEventMember, uploadEventImage, submitEventRegistration, getEventRegistrations, getEventRegistration, getEventRegistrationPass } from "../events";
 import type { RegistrationRequest } from "@/types/events";
 describe("curated native event transport", () => {
   const original = global.fetch;
@@ -14,5 +14,14 @@ describe("curated native event transport", () => {
     const calls = request.mock.calls as unknown as [string, RequestInit][];
     expect(calls.map(call => new URL(call[0]).pathname)).toEqual(["/api/mobile/v2/event-member", "/api/mobile/v2/events/event-a/images", "/api/mobile/v2/events/event-a/registrations", "/api/mobile/v2/event-registrations", "/api/mobile/v2/event-registrations/competition-registration.a"]);
     expect(calls[2][1].body).toBe(JSON.stringify(payload)); expect(new URL(calls[3][0]).searchParams.get("cursor")).toBe("cursor+next");
+  });
+  it("requests a pass only with the existing BFF session and no claimed applicant identity", async () => {
+    const request = jest.fn(async () => ({ status: 200, json: async () => ({ ok: true, data: { registration: {}, qrUrl: "https://example.test/pass" } }) })); global.fetch = request as unknown as typeof fetch;
+    await getEventRegistrationPass("existing-account-session", "registration.with.dot");
+    const [url, options] = (request.mock.calls as unknown as [string, RequestInit][])[0];
+    expect(new URL(url).pathname).toBe("/api/mobile/v2/event-registrations/registration.with.dot/pass");
+    expect(options.method).toBe("POST"); expect(options.body).toBe("{}");
+    expect(options.headers).toMatchObject({ Authorization: "Bearer existing-account-session" });
+    expect(url).not.toContain("existing-account-session");
   });
 });
