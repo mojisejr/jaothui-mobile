@@ -8,6 +8,7 @@ import { agreementsFor, automaticClass, catalogClass, classDescription, normalOp
 import { FormChoice, FormField, FormSelect, FormHeading, formStyles } from "./FormControls";
 import { ThaiBirthdayPicker } from "./ThaiBirthdayPicker";
 import { normalClassOptions } from "./normalLevels";
+import { NormalLevelSelector } from "./NormalLevelSelector";
 import { validBirthday } from "./birthday";
 import { photoTitles, type PhotoSlot } from "./photos";
 export type RegistrationFormViewProps = {
@@ -23,7 +24,8 @@ export function RegistrationFormView(props: RegistrationFormViewProps) {
   const { event, value, onChange, agreements, photos, pending, busy } = props;
   const locked = busy || !!pending;
   const automatic = automaticClass(event, value);
-  const classes = normalClassOptions(normalOptions(event, value), value.level);
+  const options = normalOptions(event, value);
+  const classes = normalClassOptions(options, value.level);
   let age: number | null = null;
   try { const birth = parseCalendarInput(value.birthdayInput).day; if (birth && validBirthday(birth) && (event.formKind === "normal" || value.color)) age = registrationAge(birth, event.ageCutoffDay, event.formKind === "royal", value.color); } catch { /* Invalid typed dates are validated on submit. */ }
   const field = (key: keyof FormFields, text: string) => onChange({ ...value, [key]: text });
@@ -54,10 +56,8 @@ export function RegistrationFormView(props: RegistrationFormViewProps) {
         {[...(automatic ? [automatic] : []), ...specialChoices(event, value)].map(choice => <View key={`${choice.level}-${choice.type}`}><FormChoice label={`ระดับ${choice.level} · ${choice.type}`} selected={value.level === choice.level && value.type === choice.type} disabled={locked} onPress={() => onChange({ ...value, ...choice, classMode: catalogClass(event, choice, choice.type)?.kind === "special" ? "special" : "auto" })} />{classDescription(event, choice, choice.type) ? <Text style={formStyles.hint}>{classDescription(event, choice, choice.type)}</Text> : null}</View>)}
       </View> : null}
     </> : <>
-      <FormHeading title="ระดับการแข่งขัน *" subtitle="ระบบเลือกระดับประเทศและรุ่นตามอายุให้ก่อน หากต้องการสมัครระดับจังหวัดเปลี่ยนได้ที่นี่ ควายตัวเดียวสมัครได้ทั้งสองระดับ โดยส่งใบสมัครแยกแต่ละรายการ" />
-      <View accessibilityRole="radiogroup" accessibilityLabel="ระดับการแข่งขัน" style={formStyles.choices}>
-        {(["ประเทศ", "จังหวัด"] as const).map(level => <FormChoice key={level} label={level === "ประเทศ" ? "ระดับประเทศ" : "ระดับจังหวัด / ท้องถิ่น"} selected={value.level === level} disabled={locked} onPress={() => onChange({ ...value, level })} />)}
-      </View>
+      <FormHeading title="ระดับการแข่งขัน *" subtitle="เลือกระดับที่มีรุ่นตรงกับข้อมูลกระบือ สมัครได้ทั้งสองระดับเมื่อเข้าเกณฑ์ของงาน โดยส่งใบสมัครแยกกัน" />
+      <NormalLevelSelector options={options} level={value.level} age={age} disabled={locked} onChange={level => onChange({ ...value, level })} />
       {!value.level ? <Text style={formStyles.hint}>เลือกระดับการแข่งขันก่อนเลือกรุ่น</Text> : [
         { title: "รุ่นตามอายุ", labels: classes.regular }, { title: "รุ่นพิเศษ", labels: classes.special },
       ].map(group => <View key={group.title}>
