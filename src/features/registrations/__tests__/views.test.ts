@@ -19,6 +19,13 @@ const props = (royal = false): RegistrationFormViewProps => ({ event: royal ? ro
 describe("mounted source-derived forms and own history presentation", () => {
   let tree: ReturnType<typeof renderer.create>;
   afterEach(() => renderer.act(() => tree?.unmount()));
+  it("confirms a durable receipt without inventing current approval or arrival while source refresh is pending", () => {
+    renderer.act(() => { tree = renderer.create(React.createElement(RegistrationDetailView, { registration: { ...registration, event: { ...registration.event, eventType: "royal" }, status: "pending", statusRefreshPending: true }, receipt: true })); });
+    const content = JSON.stringify(tree.toJSON());
+    expect(content).toContain("บันทึกใบสมัครเรียบร้อยแล้ว กำลังรอโหลดสถานะล่าสุด");
+    expect(content).toContain("โหลดสถานะล่าสุดได้จากประวัติการสมัคร");
+    expect(content).not.toContain("รอการอนุมัติ"); expect(content).not.toContain("อยู่ระหว่างพิจารณา"); expect(content).not.toContain("รายงานตัว");
+  });
   it("renders the reported 32-month buffalo with the structured 24–36 month division", () => {
     const p = props();
     const name = "ควายหนุ่ม–สาว อายุมากกว่า 24–36 เดือน";
@@ -96,7 +103,7 @@ describe("mounted source-derived forms and own history presentation", () => {
     const p = { items, period: "all" as const, filter: "all" as const, onFilter: jest.fn(), onOpen: jest.fn(), onMore: jest.fn(), hasMore: false, loadingMore: false };
     renderer.act(() => { tree = renderer.create(React.createElement(RegistrationHistoryView, p)); }); expect(tree.root.findByType(FlatList).props.data).toHaveLength(4);
     renderer.act(() => tree.update(React.createElement(RegistrationHistoryView, { ...p, filter: "pending" }))); expect(tree.root.findByType(FlatList).props.data).toHaveLength(1);
-    renderer.act(() => tree.update(React.createElement(RegistrationDetailView, { registration: { ...registration, status: "rejected", approvalComment: "กรุณาตรวจสอบเอกสาร" } }))); expect(JSON.stringify(tree.toJSON())).toContain("ไม่ผ่านการพิจารณา"); expect(JSON.stringify(tree.toJSON())).not.toContain("อยู่ระหว่างพิจารณา");
-    renderer.act(() => tree.update(React.createElement(RegistrationDetailView, { registration: { ...registration, status: "pending" }, receipt: true, replayed: true }))); expect(JSON.stringify(tree.toJSON())).toContain("ไม่มีการสมัครซ้ำ"); expect(JSON.stringify(tree.toJSON())).toContain("รอพิจารณา");
+    renderer.act(() => tree.update(React.createElement(RegistrationDetailView, { registration: { ...registration, status: "rejected", approvalComment: "กรุณาตรวจสอบเอกสาร" } }))); expect(JSON.stringify(tree.toJSON())).toContain("ไม่ผ่านการอนุมัติ"); expect(JSON.stringify(tree.toJSON())).not.toContain("อยู่ระหว่างพิจารณา");
+    renderer.act(() => tree.update(React.createElement(RegistrationDetailView, { registration: { ...registration, status: "pending" }, receipt: true, replayed: true }))); expect(JSON.stringify(tree.toJSON())).toContain("ไม่มีการสมัครซ้ำ"); expect(JSON.stringify(tree.toJSON())).toContain("รอการอนุมัติ");
   });
 });

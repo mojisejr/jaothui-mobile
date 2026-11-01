@@ -32,10 +32,22 @@ export type LineLinkResult = MobileAccountSession & { returnIntent: EventReturnI
 
 export type MemberEnrollment = { firstName: string; lastName: string; tel: string; email?: string | null };
 export type RegistrationStatus = "registered" | "pending" | "approved" | "rejected";
-export type RegistrationSummary = {
+export type ApplicantRegistrationStatus = "registered" | "pending" | "accepted" | "rejected" | "needs_type_review";
+export type ApplicantPolicy = {
+  registrationPolicyVersion?: 1;
+  registrationStatus?: ApplicantRegistrationStatus;
+  approvalRequirement?: "not_required" | "required" | "unknown";
+  checkInVersion?: 1;
+  checkInStatus?: "not_checked_in" | "checked_in";
+  checkedInAt?: string | null;
+  qrAvailable?: boolean;
+  checkInEligibility?: { eligible: boolean; reason: string | null };
+};
+export type RegistrationSummary = ApplicantPolicy & {
+  statusRefreshPending?: true;
   id: string;
-  event: { id: string; name: string; eventType: "normal" | "royal"; startDay: string | null; endDay: string | null };
-  buffalo: { name: string; microchip: string; sex: string; color: string; birthday: string; age: number; type: string; level: string };
+  event: { id: string; name: string; eventType: "normal" | "royal" | null; startDay: string | null; endDay: string | null };
+  buffalo: { name: string; microchip: string; sex: string; color: string; birthday: string; age: number | null; type: string; level: string };
   status: RegistrationStatus;
   approvalComment: string | null;
   createdAt: string;
@@ -54,3 +66,4 @@ export type RegistrationRequest = {
   address?: string; district?: string; amphoe?: string; zipcode?: string; imageIds?: string[];
 };
 export type RegistrationResult = { registration: RegistrationDetail; replayed: boolean };
+export type RegistrationPass = { registration: RegistrationDetail; qrUrl: string };
