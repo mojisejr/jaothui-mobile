@@ -5,6 +5,7 @@ import { getCertCertificate, getCertDetail } from "@/api/jaothui";
 import { MobileApiError } from "@/api/client";
 import { Screen } from "@/components/Screen";
 import { BuffaloPhoto, BuffaloPhotoFeedback, BuffaloPhotoStatus } from "@/components/BuffaloPhoto";
+import { CopyMicrochip } from "@/components/CopyMicrochip";
 import { StateBlock } from "@/components/StateBlock";
 import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
 import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
@@ -174,7 +175,7 @@ function CertDetailContent({
         </View>
         <Text style={styles.eyebrow}>ใบพันธุ์ประวัติ</Text>
         <Text style={styles.name}>{displayValue(buffalo.name, "ไม่มีชื่อ")}</Text>
-        <Text style={styles.microchip}>{displayValue(buffalo.microchip)}</Text>
+        <CopyMicrochip microchip={buffalo.microchip} identity={buffalo.tokenId ?? buffalo.microchip} />
         {hasValue(buffalo.detail) ? <Text style={styles.detail}>{buffalo.detail}</Text> : null}
       </View>
 
@@ -378,11 +379,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "900",
     lineHeight: 34,
-  },
-  microchip: {
-    color: colors.muted,
-    fontSize: 13,
-    fontVariant: ["tabular-nums"],
   },
   detail: {
     color: colors.muted,

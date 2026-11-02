@@ -17,6 +17,7 @@
 - `src/components/Screen.tsx` -> `AppShell.tsx`: opt-in ScrollView viewport callbacks for real Home visibility (other routes unchanged).
 - `src/photos/`: public microchip photo contract, screen-local focus/AppState refresh coordinator and bounded candidate-load budget; no business-resource or upload invalidation.
 - `src/components/BuffaloPhoto.tsx`: same-identity last-good/candidate replacement, generation/deadline guards and fixed gallery geometry.
+- `src/components/CopyMicrochip.tsx`: exact-string native clipboard control shared by discovery cards and detail header; async feedback stays separate from navigation and photo state.
 - `src/components/PhotoRefreshControl.tsx`: accessible photo-only manual refresh, paired with opt-in native pull refresh on Home/list/detail.
 - `contracts/photo-freshness.md`: read-side source/trigger/trust policy, test boundaries and native/SDK acceptance limits.
 - `src/types/`: API and view-model types.

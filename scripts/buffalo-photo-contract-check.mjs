@@ -22,6 +22,37 @@ function elements(source, name) {
   return matches;
 }
 
+function verifyCardActions(card) {
+  const file = ts.createSourceFile("card.tsx", card, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let roots = 0, copies = 0;
+  function walk(node, pressableDepth = 0) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const opening = ts.isJsxElement(node) ? node.openingElement : node;
+      const tag = opening.tagName.getText(file);
+      const attributes = opening.attributes.getText(file);
+      if (attributes.includes("[styles.card,")) {
+        roots++;
+        assert.equal(tag, "View", "Card layout must not own navigation");
+        assert.doesNotMatch(attributes, /onPress=/);
+      }
+      if (tag === "CopyMicrochip") {
+        copies++;
+        assert.equal(pressableDepth, 0, "Copy must be a sibling of navigation, never nested in a Pressable");
+        assert.match(attributes, /microchip=\{buffalo\.microchip\}/);
+      }
+      if (tag === "Pressable") pressableDepth++;
+    }
+    ts.forEachChild(node, (child) => walk(child, pressableDepth));
+  }
+  walk(file);
+  assert.equal(roots, 1);
+  assert.equal(copies, 1);
+  const navigation = elements(card, "Pressable").filter((element) => /onPress=\{onPress\}/.test(element));
+  assert.equal(navigation.length, 2);
+  assert.ok(navigation.some((element) => element.includes("styles.imageFrame")));
+  assert.ok(navigation.some((element) => element.includes("styles.titleRow")));
+}
+
 function verify({ photo, card, detail, home }) {
   assert.match(photo, /resizeMode="contain"/);
   assert.doesNotMatch(photo, /resizeMode="(?:cover|stretch)"/);
@@ -65,7 +96,8 @@ function verify({ photo, card, detail, home }) {
   }
   assert.match(card, /memo\(BuffaloCardComponent\)/);
   assert.match(card, /const singleColumn = buffaloCardColumns\(width, fontScale\) === 1/);
-  assert.match(card, /<Pressable style=\{\[styles\.card, singleColumn && \(layout === "list" \? styles\.listSingleColumn : styles\.singleColumn\)\]\} onPress=\{onPress\}/);
+  assert.match(card, /<View style=\{\[styles\.card, singleColumn && \(layout === "list" \? styles\.listSingleColumn : styles\.singleColumn\)\]\}/);
+  verifyCardActions(card);
   assert.match(card, /layout = "grid"/);
   assert.match(card, /listSingleColumn: \{ width: "100%", flexBasis: "auto", flexGrow: 0, flexShrink: 0 \}/);
   const cardStyle = card.match(/card: \{([\s\S]*?)\n  \},/)?.[1];
@@ -102,6 +134,9 @@ const mutants = [
   { ...sources, card: sources.card.replace('layout === "list"', 'layout === "grid"') },
   { ...sources, card: sources.card.replace('flexBasis: "auto"', 'flexBasis: "100%"') },
   { ...sources, card: sources.card.replace('flexGrow: 0, flexShrink: 0', 'flexGrow: 1, flexShrink: 1') },
+  { ...sources, card: sources.card.replace('<View style={[styles.card,', '<Pressable style={[styles.card,') },
+  { ...sources, card: sources.card.replace(/<CopyMicrochip[^>]*\/>/, (copy) => `<Pressable onPress={onPress}>${copy}</Pressable>`) },
+  { ...sources, card: sources.card.replace('testID="card-name-navigation" onPress={onPress}', 'testID="card-name-navigation"') },
 ];
 for (const [index, mutant] of mutants.entries()) assert.throws(() => verify(mutant), `Policy mutant ${index + 1} must be rejected`);
 const list = read("src/features/buffalos/BuffaloListScreen.tsx");
