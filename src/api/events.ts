@@ -32,9 +32,10 @@ export function cancelEventLineLink(token: string, intentId: string) {
 export function enrollEventMember(token: string, fields: MemberEnrollment) {
   return mobilePostWithAuth<{ member: EventMember; created: boolean }>("/api/mobile/v2/event-member", fields, token);
 }
-export function getEventRegistrations(token: string, cursor?: string, period: "active" | "past" | "all" = "all", q = "") {
+export function getEventRegistrations(token: string, cursor?: string, period: "active" | "past" | "all" = "all", q = "", eventId?: string) {
   const params = new URLSearchParams({ limit: "20", period, q });
   if (cursor) params.set("cursor", cursor);
+  if (eventId) params.set("eventId", eventId);
   return mobileGetWithAuth<RegistrationHistory>(`/api/mobile/v2/event-registrations?${params}`, token);
 }
 export function getEventRegistration(token: string, id: string) {

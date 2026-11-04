@@ -21,6 +21,11 @@
 - `src/components/PhotoRefreshControl.tsx`: accessible photo-only manual refresh, paired with opt-in native pull refresh on Home/list/detail.
 - `contracts/photo-freshness.md`: read-side source/trigger/trust policy, test boundaries and native/SDK acceptance limits.
 - `src/types/`: API and view-model types.
+- `src/notifications/`: device-scoped explicit push consent, secure installation
+  and disable-only logout queue, token lifecycle, fixed owned-history intent and
+  native listeners; defaults dormant through the backend availability switch.
+- `contracts/competition-notifications.md`: native runtime boundary, ownership,
+  API/permission behavior and pending real-device proof for push reminders.
 
 ## Data Flow
 

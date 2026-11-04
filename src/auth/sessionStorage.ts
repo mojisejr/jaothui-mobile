@@ -8,6 +8,8 @@ import { advanceSessionGeneration, currentSessionGeneration, serializeAuthWrite 
 import { eraseOAuthIntent, readOAuthIntent, writeOAuthIntent, sessionIdentity } from "./oauthIntentStorage";
 
 import { MobileSessionStorageError, secureStorageCall, SECURE_STORAGE_ERROR_MESSAGE } from "./storageErrors";
+import { prepareNotificationAccount, revokeCurrentNotificationBinding } from "@/notifications/lifecycle";
+import { eraseHistoryIntent } from "@/notifications/historyIntent";
 export { MobileSessionStorageError } from "./storageErrors";
 
 const SESSION_KEY = "jaothui.mobileSession.v1";
@@ -123,6 +125,10 @@ export async function saveMobileSession(
       // session write can safely retry; a saved session can recover its target.
       await writeOAuthIntent({ ...intent, status: "completed", completedAccountId: session.identity.accountId }, storage);
     }
+    await prepareNotificationAccount(session.identity.sessionVersion === 2 ? session.identity.accountId : null, storage, () => {
+      if (currentSessionGeneration() !== generation) throw new MobileSessionStorageError("Session changed while authentication was pending");
+    });
+    if (currentSessionGeneration() !== generation) throw new MobileSessionStorageError("Session changed while authentication was pending");
     await secureStorageCall(() => storage.setItemAsync(SESSION_KEY, JSON.stringify(session)));
     // A failed native session write must not erase a still-recoverable intent.
     if (!guard) await eraseOAuthIntent(storage);
@@ -135,6 +141,13 @@ export async function clearMobileSession(storage: SecureStoreAdapter = SecureSto
     await secureStorageCall(() => storage.deleteItemAsync(SESSION_KEY));
     await eraseOAuthIntent(storage);
   });
+}
+
+// Passive expiry uses clearMobileSession. Only explicit logout revokes consent.
+export async function logoutMobileSession(storage: SecureStoreAdapter = SecureStore) {
+  advanceSessionGeneration();
+  try { await revokeCurrentNotificationBinding(storage); }
+  finally { await clearMobileSession(storage); await eraseHistoryIntent(storage); }
 }
 
 export async function loadMobileSession(
