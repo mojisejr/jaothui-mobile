@@ -7,7 +7,8 @@ import { agreementsFor, buildRegistrationRequest, emptyFields } from "../model";
 import { encodeCompetitionClass } from "../competitionClasses";
 import type { RegistrationRequest, RegistrationResult } from "@/types/events";
 import type { MobileAppleAccountSession } from "@/types/mobile-api";
-import { normalEvent, filledFields, registration } from "./fixtures";
+import { normalEvent, royalEvent, filledFields, registration } from "./fixtures";
+import { NotificationInvitation } from "@/notifications/NotificationInvitation";
 let mockSession: MobileAppleAccountSession | null;
 const mockGet = jest.fn(), mockSend = jest.fn(), mockPrivate = jest.fn(), mockSame = jest.fn(), mockUUID = jest.fn(), mockLookup = jest.fn();
 jest.mock("expo-router", () => ({ useFocusEffect: (callback: () => (() => void)) => mockUseEffect(callback, [callback]), useRouter: () => ({ replace: jest.fn() }), useLocalSearchParams: () => ({ eventId: "fixture-event" }) }));
@@ -18,6 +19,7 @@ jest.mock("../customer", () => ({ sameCustomer: (...args: unknown[]) => mockSame
 jest.mock("../nativePhotos", () => ({ selectApplicantPhoto: jest.fn(), normalizeApplicantPhoto: jest.fn(), readApplicantBytes: jest.fn() }));
 jest.mock("../useDraftExit", () => ({ useDraftExit: () => ({ visible: false, blocked: false, onStay: jest.fn(), onDiscard: jest.fn() }) }));
 jest.mock("../CustomerGate", () => ({ CustomerGate: () => null }));
+jest.mock("@/notifications/NotificationInvitation", () => ({ NotificationInvitation: () => null }));
 jest.mock("@/features/profile/sessionRecovery", () => ({ recoverRejectedMobileSession: jest.fn() }));
 jest.mock("@/components/Screen", () => ({ Screen: ({ children }: { children: React.ReactNode }) => children }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -73,8 +75,10 @@ describe("mounted normal controller rebinding", () => {
     await mount(); const stale = form();
     await renderer.act(async () => stale.onSubmit());
     expect(tree.root.findAllByType(RegistrationDetailView)).toHaveLength(1);
+    expect(tree.root.findAllByType(NotificationInvitation)).toHaveLength(1);
     expect(tree.root.findByProps({ accessibilityLabel: "ดูประวัติการสมัครของฉัน" })).toBeDefined();
     await press("สมัครควายตัวนี้เพิ่มอีกระดับหรือรุ่นอื่น");
+    expect(tree.root.findAllByType(NotificationInvitation)).toHaveLength(0);
     expect(form().value).toMatchObject({ level: "จังหวัด", type: filledFields.type, firstName: filledFields.firstName, name: filledFields.name });
     expect(form().agreements).toEqual({}); expect(form().pending).toBeUndefined();
     // An old controller callback cannot submit the first payload into the new Ready binding.
@@ -88,10 +92,26 @@ describe("mounted normal controller rebinding", () => {
   it("keeps uncertain retry immutable and never exposes the next-entry action before confirmation", async () => {
     mockSend.mockRejectedValueOnce(new Error("response lost"));
     await mount(); await renderer.act(async () => form().onSubmit());
-    expect(form().pending).toBe("uncertain"); expect(JSON.stringify(tree.toJSON())).not.toContain("สมัครควายตัวนี้เพิ่มอีกระดับหรือรุ่นอื่น");
+    expect(form().pending).toBe("uncertain"); expect(tree.root.findAllByType(NotificationInvitation)).toHaveLength(0); expect(JSON.stringify(tree.toJSON())).not.toContain("สมัครควายตัวนี้เพิ่มอีกระดับหรือรุ่นอื่น");
     const first = JSON.parse(JSON.stringify(mockSend.mock.calls[0][2]));
     await renderer.act(async () => form().onSubmit());
     expect(mockSend.mock.calls[1][2]).toEqual(first); expect(mockUUID).toHaveBeenCalledTimes(1);
+  });
+  it.each(["normal", "royal"] as const)("places the invitation only after a confirmed %s registration receipt", async kind => {
+    mockGet.mockResolvedValue(kind === "royal" ? royalEvent : event);
+    const draft = eventDraft(mockSession!.identity.accountId, event.id);
+    draft.receipt = { registration: { ...registration, event: { ...registration.event, eventType: kind } }, replayed: false };
+    await mount();
+    expect(tree.root.findAllByType(NotificationInvitation)).toHaveLength(1);
+    expect(tree.root.findAllByType(RegistrationDetailView)).toHaveLength(1);
+  });
+  it("does not invite while only enrolling membership or when initial event loading fails", async () => {
+    mockPrivate.mockImplementation(async () => ({ session: mockSession, value: { member: null } }));
+    await renderer.act(async () => { tree = renderer.create(React.createElement(RegistrationScreen, { memberMode: true })); });
+    expect(tree.root.findAllByType(NotificationInvitation)).toHaveLength(0);
+    await renderer.act(async () => tree.unmount());
+    mockGet.mockRejectedValue(new Error("event unavailable")); await mount();
+    expect(tree.root.findAllByType(NotificationInvitation)).toHaveLength(0);
   });
   it.each(["logout", "account switch"])("drops late successful results after %s and keeps the old operation frozen for recovery", async change => {
     const late = deferred<RegistrationResult>(); mockSend.mockReturnValueOnce(late.promise);

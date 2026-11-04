@@ -20,6 +20,13 @@ This PR does not build, deploy, configure provider credentials or send notificat
   `/api/notifications/revoke`. These depend on Front issue226 accepted backend.
 - Server `available:false` does not remove the opt-out action for prior consent.
   OS grant alone is not “enabled”; secure local and server generations must agree.
+- A small invitation appears after a confirmed normal/Royal registration receipt
+  and as the scrolling FlatList header on non-empty owned history. It reuses the
+  same status/enable service; no automatic permission prompt. Enabled, blocked,
+  unsupported, unavailable, paused and pending-disable states hide the invitation.
+  “ไว้ภายหลัง” hides it across these placements for seven days per device/account;
+  SecureStore retains at most eight recent account dismissals. A failed dismissal
+  write quietly hides the current card. Existing profile remains the settings hub.
 - Payload allowlist: `kind=competition-reminder`, stable `eventId`, optional
   `expiresAt` and `reminderId`. No URL accepted. Taps open `/registrations` with an
   exact eventId and period all, using the existing private owned-history API.
