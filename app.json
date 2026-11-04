@@ -2,7 +2,7 @@
   "expo": {
     "name": "JAOTHUI Mobile",
     "slug": "jaothui-mobile",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "jaothui",
@@ -48,6 +48,13 @@
           "photosPermission": "อนุญาตให้ JAOTHUI เลือกรูปเพื่อประกอบใบสมัครประกวดกระบือ",
           "cameraPermission": "อนุญาตให้ JAOTHUI ใช้กล้องเพื่อถ่ายรูปประกอบใบสมัครประกวดกระบือ",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "competition-reminders",
+          "enableBackgroundRemoteNotifications": false
         }
       ]
     ],

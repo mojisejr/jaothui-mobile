@@ -4,7 +4,7 @@ import { FormSelect } from "../FormControls";
 let mockResource: Record<string, unknown>;
 jest.mock("../useRegistrationResource", () => ({ useRegistrationResource: () => mockResource }));
 jest.mock("../ApplicantQrPanel", () => ({ ApplicantQrPanel: () => null }));
-jest.mock("expo-router", () => ({ useFocusEffect: jest.fn(), useRouter: () => ({ replace: jest.fn(), push: jest.fn() }) }));
+jest.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), useFocusEffect: jest.fn(), useRouter: () => ({ replace: jest.fn(), push: jest.fn() }) }));
 jest.mock("../CustomerGate", () => ({ CustomerGate: () => null }));
 jest.mock("@/components/Screen", () => ({ Screen: ({ children }: { children: React.ReactNode }) => children }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports

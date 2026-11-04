@@ -24,4 +24,12 @@ describe("curated native event transport", () => {
     expect(options.headers).toMatchObject({ Authorization: "Bearer existing-account-session" });
     expect(url).not.toContain("existing-account-session");
   });
+  it("scopes notification history by stable eventId and keeps pagination bound to that event", async () => {
+    const request = jest.fn(async () => ({ status: 200, json: async () => ({ ok: true, data: { items: [], nextCursor: null } }) })); global.fetch = request as unknown as typeof fetch;
+    await getEventRegistrations("existing-account-session", "scoped-cursor", "all", "", "competition-event-1");
+    const [url] = (request.mock.calls as unknown as [string, RequestInit][])[0];
+    expect(new URL(url).searchParams.get("eventId")).toBe("competition-event-1");
+    expect(new URL(url).searchParams.get("period")).toBe("all");
+    expect(new URL(url).searchParams.get("cursor")).toBe("scoped-cursor");
+  });
 });
