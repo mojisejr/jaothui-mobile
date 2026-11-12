@@ -1,7 +1,7 @@
+import Svg, { Circle, Path } from "react-native-svg";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { getBuffalos } from "@/api/jaothui";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { buffaloCardColumns } from "@/components/buffaloCardLayout";
@@ -9,7 +9,8 @@ import { StateBlock } from "@/components/StateBlock";
 import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
 import { usePhotoFreshness } from "@/photos/usePhotoFreshness";
 import { bottomNav, colors, radius, shadow, spacing } from "@/design/tokens";
-import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useBuffaloList } from "./useBuffaloList";
+import { Skeleton } from "@/components/Skeleton";
 import type {
   MobileBuffaloAgeOperator,
   MobileBuffaloCard,
@@ -49,18 +50,10 @@ export function BuffaloListScreen() {
     return () => clearTimeout(timeout);
   }, [searchInput]);
 
-  const loadBuffalos = useCallback(
-    () =>
-      getBuffalos({
-        page,
-        search,
-        ...filter,
-      }),
-    [filter, page, search]
-  );
-  const state = useAsyncResource(loadBuffalos);
-  const photoEntries = useMemo(() => state.status === "success" ? state.data.items : EMPTY_BUFFALOS, [state.data, state.status]);
-  const photos = usePhotoFreshness(photoEntries);
+  const query = useMemo(() => ({ page, search, ...filter }), [filter, page, search]);
+  const state = useBuffaloList(query, searchInput.trim() !== search);
+  const listData = state.data?.items ?? EMPTY_BUFFALOS;
+  const photos = usePhotoFreshness(listData);
 
   const patchFilter = useCallback((patch: Partial<FilterState>) => {
     setFilter((current) => ({ ...current, ...patch }));
@@ -112,9 +105,8 @@ export function BuffaloListScreen() {
     [photos.photos, router]
   );
 
-  const listData = state.status === "success" ? state.data.items : EMPTY_BUFFALOS;
-  const totalPages = state.status === "success" ? state.data.pagination.totalPages : 1;
-  const totalCount = state.status === "success" ? state.data.pagination.totalCount : 0;
+  const totalPages = state.data?.pagination.totalPages ?? 1;
+  const totalCount = state.data?.pagination.totalCount ?? 0;
 
   return (
     <AppShell activeTab="buffalo" scroll={false}>
@@ -140,12 +132,13 @@ export function BuffaloListScreen() {
             activeChips={activeChips}
             filter={filter}
             filterOpen={filterOpen}
-            page={state.status === "success" ? state.data.pagination.page : page}
+            page={state.data?.pagination.page ?? page}
             searchInput={searchInput}
             totalCount={totalCount}
             totalPages={totalPages}
             status={state.status}
-            errorMessage={state.status === "error" ? state.error.message : null}
+            hasPrevious={listData.length > 0}
+            columns={columns}
             onClearChip={clearChip}
             onFilterToggle={() => setFilterOpen((open) => !open)}
             onFilterPatch={patchFilter}
@@ -158,9 +151,9 @@ export function BuffaloListScreen() {
         ListEmptyComponent={
           state.status === "success" ? (
             <StateBlock
-              title="ไม่พบกระบือ"
-              message="ลองค้นหาด้วยคำอื่น หรือล้างตัวกรองเพื่อดูรายการทั้งหมด"
-              actionLabel="ล้างตัวกรอง"
+              title={activeChips.length ? "ไม่พบควายตามคำค้นนี้" : "ยังไม่มีควายในรายการ"}
+              message={activeChips.length ? "ลองเปลี่ยนคำค้นหรือเงื่อนไขที่เลือก" : undefined}
+              actionLabel={activeChips.length ? "ล้างคำค้นและตัวกรอง" : undefined}
               onAction={resetFilters}
             />
           ) : null
@@ -184,7 +177,8 @@ type ListHeaderProps = {
   status: "loading" | "success" | "error";
   totalCount: number;
   totalPages: number;
-  errorMessage: string | null;
+  hasPrevious: boolean;
+  columns: number;
   onClearChip: (key: ActiveChip["key"]) => void;
   onFilterToggle: () => void;
   onFilterPatch: (patch: Partial<FilterState>) => void;
@@ -202,7 +196,8 @@ function ListHeader({
   status,
   totalCount,
   totalPages,
-  errorMessage,
+  hasPrevious,
+  columns,
   onClearChip,
   onFilterToggle,
   onFilterPatch,
@@ -215,8 +210,7 @@ function ListHeader({
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <View style={styles.titleCopy}>
-            <Text style={styles.title}>NFT เพชรดีกรี</Text>
-            <Text style={styles.subtitle}>ค้นหาและกรองกระบือจาก Mobile BFF API</Text>
+            <Text accessibilityRole="header" style={styles.title}>ค้นหาควาย</Text>
           </View>
           <Pressable
             accessibilityLabel="ตัวกรอง"
@@ -224,7 +218,7 @@ function ListHeader({
             style={[styles.filterButton, activeChips.length > 0 ? styles.filterButtonActive : null]}
             onPress={onFilterToggle}
           >
-            <Text style={styles.filterIcon}>≡</Text>
+            <Text style={styles.filterIcon}>ตัวกรอง</Text>
             {activeChips.length > 0 ? (
               <View style={styles.filterCount}>
                 <Text style={styles.filterCountText}>{activeChips.length}</Text>
@@ -234,14 +228,16 @@ function ListHeader({
         </View>
 
         <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>ค้น</Text>
+          <Svg accessible={false} width={20} height={20} viewBox="0 0 24 24" stroke={colors.gold} strokeWidth={2} fill="none">
+            <Circle cx={10} cy={10} r={6.5} /><Path d="m15 15 5 5" />
+          </Svg>
           <TextInput
             accessibilityLabel="ค้นหาเลขชิปหรือชื่อควาย"
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"
             onChangeText={onSearchChange}
-            placeholder="ค้นหาเลขชิป, ชื่อควาย"
+            placeholder="ชื่อควาย หรือเลขไมโครชิป"
             placeholderTextColor={colors.muted}
             returnKeyType="search"
             style={styles.searchInput}
@@ -263,21 +259,36 @@ function ListHeader({
         {filterOpen ? <FilterPanel filter={filter} onChange={onFilterPatch} onReset={onResetFilters} /> : null}
 
         {status === "loading" ? (
-          <StateBlock title="กำลังโหลดรายการ" message="กำลังเรียก /api/mobile/v1/buffalos" />
+          <View accessibilityLiveRegion="polite" style={styles.searchStatus}>
+            <Text style={styles.statusText}>
+              {searchInput.trim() ? `กำลังค้นหา “${searchInput.trim()}”…` : "กำลังโหลดรายชื่อควาย…"}
+            </Text>
+            {hasPrevious
+              ? <Text style={styles.statusText}>แสดงผลก่อนหน้า · หน้า {page} จาก {totalPages} · {totalCount} ตัว</Text>
+              : <View style={styles.loadingRow} accessible={false}>
+                  {Array.from({ length: columns }, (_, index) =>
+                    <View key={index} style={styles.loadingCard}>
+                      <Skeleton variant="image" style={styles.loadingPhoto} />
+                      <Skeleton style={styles.loadingLine} />
+                    </View>)}
+                </View>}
+          </View>
         ) : null}
 
         {status === "error" ? (
-          <StateBlock
-            title="โหลดรายการไม่สำเร็จ"
-            message={errorMessage || "กรุณาลองใหม่อีกครั้ง"}
-            actionLabel="ลองใหม่"
-            onAction={onRetry}
-          />
+          <View accessibilityLiveRegion="polite">
+            <StateBlock
+              title="โหลดรายชื่อควายไม่ได้"
+              message={hasPrevious ? `ยังแสดงผลก่อนหน้า · หน้า ${page} จาก ${totalPages} · ${totalCount} ตัว` : undefined}
+              actionLabel="ลองอีกครั้ง"
+              onAction={onRetry}
+            />
+          </View>
         ) : null}
 
         {status === "success" ? (
-          <Text style={styles.resultText}>
-            หน้า {page} จาก {totalPages} · {totalCount} รายการ
+          <Text accessibilityLiveRegion="polite" style={styles.resultText}>
+            พบ {totalCount} ตัว{totalPages > 1 ? ` · หน้า ${page} จาก ${totalPages}` : ""}
           </Text>
         ) : null}
       </View>
@@ -504,29 +515,29 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "900",
   },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-  },
+  searchStatus: { gap: spacing.xs, paddingVertical: spacing.md },
+  statusText: { color: colors.muted, fontSize: 14 },
+  loadingRow: { flexDirection: "row", gap: spacing.cardGap, marginTop: spacing.xs },
+  loadingCard: { flex: 1, minWidth: 0, padding: spacing.xxs, gap: spacing.sm, borderRadius: radius.photo, backgroundColor: colors.surface },
+  loadingPhoto: { aspectRatio: 3 / 2 },
+  loadingLine: { margin: spacing.xs, width: "65%" },
   filterButton: {
     alignItems: "center",
     borderColor: colors.borderSoft,
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: spacing.touchTarget,
+    minHeight: spacing.touchTarget,
     justifyContent: "center",
     position: "relative",
-    width: spacing.touchTarget,
+    paddingHorizontal: spacing.md,
   },
   filterButtonActive: {
     borderColor: colors.gold,
   },
   filterIcon: {
     color: colors.gold,
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "700",
     lineHeight: 24,
   },
   filterCount: {
@@ -555,11 +566,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     minHeight: 54,
     paddingHorizontal: spacing.md,
-  },
-  searchIcon: {
-    color: colors.gold,
-    fontSize: 12,
-    fontWeight: "900",
   },
   searchInput: {
     color: colors.foreground,

@@ -1,26 +1,25 @@
 import React from "react";
-import { AccessibilityInfo, Dimensions, Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { AccessibilityInfo, Dimensions, Image, Platform, Share, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { BuffaloCard } from "../BuffaloCard";
 import { CopyMicrochip } from "../CopyMicrochip";
 import { BuffaloPhotoFeedback } from "../BuffaloPhoto";
 import { CertDetailScreen } from "@/features/certs/CertDetailScreen";
-import { getCertCertificate } from "@/api/jaothui";
+import { shareOrDownloadCertificate } from "@/features/certs/certificateFile";
+import { getCertCertificate, getCertRewards, getCertSummary } from "@/api/jaothui";
 import { colors, spacing } from "@/design/tokens";
 import type { MobileBuffaloDetail } from "@/types/mobile-api";
 
 jest.mock("expo-clipboard", () => ({ setStringAsync: jest.fn() }));
 jest.mock("expo-router", () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ microchip: mockBuffalo.microchip }) }));
-jest.mock("@/api/jaothui", () => ({ getCertDetail: jest.fn(), getCertCertificate: jest.fn() }));
+jest.mock("@/api/jaothui", () => ({ getCertSummary: jest.fn(), getCertRewards: jest.fn(), getCertCertificate: jest.fn() }));
 jest.mock("@/features/certs/certificateFile", () => ({ shareOrDownloadCertificate: jest.fn() }));
-jest.mock("@/hooks/useAsyncResource", () => ({ useAsyncResource: () => ({ status: "success", data: { buffalo: mockBuffalo, rewards: [] }, reload: mockReload }) }));
 jest.mock("@/photos/usePhotoFreshness", () => ({ usePhotoFreshness: () => mockPhotos }));
 jest.mock("@/components/Screen", () => ({ Screen: ({ children }: { children: React.ReactNode }) => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require("react").createElement(require("react-native").View, null, children);
 } }));
 const mockRouter = { back: jest.fn(), push: jest.fn() };
-const mockReload = jest.fn();
 const mockPhotos = { photos: new Map(), refreshing: false, refresh: jest.fn(), status: "idle" };
 const buffalo: MobileBuffaloDetail = {
   tokenId: 71, microchip: "000040226601197", name: "ฟ้าประทาน", imageUrl: "https://example.invalid/buffalo.jpg",
@@ -55,6 +54,8 @@ describe("mounted card and certificate microchip integration", () => {
   async function pressCopy() { await renderer.act(async () => { await copy().props.onPress(); }); }
   beforeEach(() => {
     jest.useFakeTimers(); jest.clearAllMocks(); mockBuffalo = buffalo; write.mockReset().mockResolvedValue(true);
+    jest.mocked(getCertSummary).mockImplementation(async () => ({ buffalo: mockBuffalo }));
+    jest.mocked(getCertRewards).mockResolvedValue({ rewards: [] });
     Dimensions.set({ window: { width: 390, height: 844, scale: 1, fontScale: 1 } });
     jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockImplementation(() => new Promise(() => {}));
   });
@@ -115,16 +116,13 @@ describe("mounted card and certificate microchip integration", () => {
     await pressCopy(); expect([style(card), style(frame), style(footer)]).toEqual(geometry);
   });
 
-  it("copies only the detail chip under the name while Signature ID and parent identifiers stay static", async () => {
+  it("copies only the detail chip under the name while parent identifiers stay static", async () => {
     const fetch = jest.spyOn(globalThis, "fetch");
-    renderer.act(() => { tree = renderer.create(React.createElement(CertDetailScreen)); });
+    await renderer.act(async () => { tree = renderer.create(React.createElement(CertDetailScreen)); });
     const controls = tree.root.findAllByType(CopyMicrochip); expect(controls).toHaveLength(1);
     const title = tree.root.findByProps({ children: buffalo.name });
     expect(controls[0].parent).toBe(title.parent);
     expect(title.parent!.children.indexOf(controls[0])).toBe(title.parent!.children.indexOf(title) + 1);
-    const signature = tree.root.findByProps({ children: "Signature ID" }).parent!;
-    expect(signature.findByProps({ children: buffalo.microchip })).toBeDefined();
-    expect(signature.findAllByType(CopyMicrochip)).toHaveLength(0);
     expect(tree.root.findByProps({ children: buffalo.fatherId })).toBeDefined();
     expect(tree.root.findByProps({ children: buffalo.motherId })).toBeDefined();
     renderer.act(() => tree.root.findByType(Image).props.onLoad());
@@ -132,13 +130,63 @@ describe("mounted card and certificate microchip integration", () => {
     expect(write).toHaveBeenCalledWith(buffalo.microchip);
     expect(tree.root.findByType(Image)).toBe(image);
     expect(mockRouter.back).not.toHaveBeenCalled(); expect(mockRouter.push).not.toHaveBeenCalled();
-    expect(getCertCertificate).not.toHaveBeenCalled(); expect(mockReload).not.toHaveBeenCalled(); expect(mockPhotos.refresh).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+    expect(getCertCertificate).not.toHaveBeenCalled(); expect(getCertSummary).toHaveBeenCalledTimes(1); expect(mockPhotos.refresh).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("reads the identity despite a failed reward lookup and retries only the reward section", async () => {
+    jest.mocked(getCertRewards).mockRejectedValueOnce(new Error("private debug error"));
+    await renderer.act(async () => { tree = renderer.create(React.createElement(CertDetailScreen)); });
+    expect(tree.root.findByProps({ children: buffalo.name })).toBeDefined();
+    const retry = tree.root.findByProps({ accessibilityLabel: "ลองโหลดรางวัลอีกครั้ง" });
+    await renderer.act(async () => { await retry.props.onPress(); });
+    expect(tree.root.findByProps({ children: "ยังไม่มีรางวัลในทะเบียน" })).toBeDefined();
+    expect(getCertSummary).toHaveBeenCalledTimes(1);
+    expect(getCertRewards).toHaveBeenCalledTimes(2);
+    expect(getCertCertificate).not.toHaveBeenCalled();
+  });
+
+  it.each(["ios", "android"] as const)("shares the public link on %s while JPEG generation waits for a separate action", async (os) => {
+    mockBuffalo = { ...buffalo, certificate: { microchip: buffalo.microchip } };
+    jest.replaceProperty(Platform, "OS", os);
+    const share = jest.spyOn(Share, "share").mockResolvedValue({ action: "dismissedAction" });
+    const expectedLink = "https://jaothui.com/api/seo/og?microchip=" + buffalo.microchip;
+    const file = { microchip: buffalo.microchip, tokenId: "71", imageBase64: "YQ==", encoding: "base64", mimeType: "image/jpeg" };
+    jest.mocked(getCertCertificate).mockResolvedValue(file);
+    await renderer.act(async () => { tree = renderer.create(React.createElement(CertDetailScreen)); });
+    const action = (label: string) => tree.root.findByProps({ accessibilityLabel: label }).props.onPress();
+    await renderer.act(async () => { action("แชร์ข้อมูลควาย"); });
+    expect(share).toHaveBeenCalledWith(os === "ios" ? { url: expectedLink } : { message: expectedLink });
+    expect(getCertCertificate).not.toHaveBeenCalled();
+    expect(shareOrDownloadCertificate).not.toHaveBeenCalled();
+    await renderer.act(async () => { action("คัดลอกลิงก์"); });
+    expect(write).toHaveBeenCalledWith(expectedLink);
+    await renderer.act(async () => { action("ดูรูปใบรับรอง"); action("ดูรูปใบรับรอง"); });
+    expect(getCertCertificate).toHaveBeenCalledTimes(1);
+    await renderer.act(async () => { action("แชร์รูปใบรับรอง"); });
+    expect(shareOrDownloadCertificate).toHaveBeenCalledWith(file);
+    expect(share).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts the previous chip's pending certificate on navigation", async () => {
+    mockBuffalo = { ...buffalo, certificate: { microchip: buffalo.microchip } };
+    let finish!: (file: Awaited<ReturnType<typeof getCertCertificate>>) => void;
+    jest.mocked(getCertCertificate).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    await renderer.act(async () => { tree = renderer.create(React.createElement(CertDetailScreen)); });
+    await renderer.act(async () => { void tree.root.findByProps({ accessibilityLabel: "ดูรูปใบรับรอง" }).props.onPress(); });
+    const [, signal] = jest.mocked(getCertCertificate).mock.calls[0];
+    mockBuffalo = { ...buffalo, name: "ตัวใหม่", microchip: "000040226601199" };
+    await renderer.act(async () => { tree.update(React.createElement(CertDetailScreen)); });
+    expect(signal?.aborted).toBe(true);
+    await renderer.act(async () => { finish({ microchip: buffalo.microchip, tokenId: "71", mimeType: "image/jpeg", encoding: "base64", imageBase64: "YQ==" }); });
+    expect(tree.root.findByProps({ children: "ตัวใหม่" })).toBeDefined();
+    expect(tree.root.findByProps({ children: "ยังไม่มีรูปใบรับรองในทะเบียน" })).toBeDefined();
+    expect(tree.root.findAllByType(Image).every(node => !String(node.props.source?.uri).startsWith("data:"))).toBe(true);
   });
 
   it("a detail identity change clears earlier copy feedback", async () => {
-    renderer.act(() => { tree = renderer.create(React.createElement(CertDetailScreen)); }); await pressCopy();
+    await renderer.act(async () => { tree = renderer.create(React.createElement(CertDetailScreen)); }); await pressCopy();
     mockBuffalo = { ...buffalo, microchip: "000040226601199", tokenId: 99 };
-    renderer.act(() => tree.update(React.createElement(CertDetailScreen)));
+    await renderer.act(async () => { tree.update(React.createElement(CertDetailScreen)); });
     expect(copy(mockBuffalo.microchip).props.accessibilityValue.text).toBe("แตะเพื่อคัดลอก");
   });
 });

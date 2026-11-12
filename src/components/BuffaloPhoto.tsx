@@ -6,6 +6,7 @@ import { photoCandidateQueue, PHOTO_CANDIDATE_TIMEOUT_MS } from "@/photos/candid
 type BuffaloPhotoProps = {
   uri: string | null;
   label: string;
+  thumbnail?: string;
   /** Entity identity, NOT its URI: A's bitmap must never be B's fallback. */
   identity?: string;
   retry?: number;
@@ -33,15 +34,15 @@ export function BuffaloPhotoStatus({ leading, footerHeight = spacing.touchTarget
 }
 
 /** The parent owns a fixed frame; this primitive never crops an identity photo. */
-export const BuffaloPhoto = memo(function BuffaloPhoto({ uri, label, identity, retry = 0 }: BuffaloPhotoProps) {
+export const BuffaloPhoto = memo(function BuffaloPhoto({ uri, label, identity, thumbnail, retry = 0 }: BuffaloPhotoProps) {
   return (
     <View style={styles.inset}>
-      <PhotoSource key={identity ?? label} uri={uri} label={label} retry={retry} />
+      <PhotoSource key={identity ?? label} uri={thumbnail ?? uri} fallback={thumbnail ? uri : null} label={label} retry={retry} />
     </View>
   );
 });
 
-function PhotoSource({ uri, label, retry = 0 }: BuffaloPhotoProps) {
+function PhotoSource({ uri, fallback, label, retry = 0 }: BuffaloPhotoProps & { fallback?: string | null }) {
   const [good, setGood] = useState<Layer | null>(null);
   const [candidate, setCandidate] = useState<Layer | null>(uri ? { uri, key: 0 } : null);
   const [failed, setFailed] = useState(false);
@@ -73,13 +74,19 @@ function PhotoSource({ uri, label, retry = 0 }: BuffaloPhotoProps) {
     if (!changed && !retried) return;
     if (!changed && candidate?.uri === uri) return;
     // A successful unchanged source keeps its mounted native Image/cache key.
-    if (good?.uri === uri) { generation.current++; setCandidate(null); setFailed(false); return; }
+    if (good && (good.uri === uri || good.uri === fallback)) { generation.current++; setCandidate(null); setFailed(false); return; }
     const key = ++generation.current;
     setFailed(false);
     setCandidate(uri ? { uri, key } : null);
-  }, [candidate?.uri, good?.uri, retry, uri]);
+  }, [candidate?.uri, fallback, good, retry, uri]);
   const accept = (layer: Layer, success: boolean) => {
     if (!alive.current || layer.key !== generation.current) return;
+    // Keep the bounded image queue for both attempts. A failed optimizer can fall
+    // back once to the same version of this buffalo's original public photo.
+    if (!success && fallback && layer.uri !== fallback) {
+      setCandidate({ uri: fallback, key: ++generation.current });
+      return;
+    }
     if (success) setGood(layer);
     setFailed(!success);
     setCandidate(null);

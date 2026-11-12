@@ -77,7 +77,7 @@ function CopyableMicrochip({ microchip }: { microchip: string }) {
         <Text style={styles.microchip}>{microchip}</Text>
         <View style={styles.feedback}>
           {/* Reserve the longest feedback at the current width/font scale. */}
-          <Text style={[styles.feedbackText, styles.reserve]}>{feedback.error}</Text>
+          <Text aria-hidden accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.feedbackText, styles.reserve]}>{feedback.error}</Text>
           <Text style={[styles.feedbackText, styles.feedbackOverlay, { color }]}>{feedback[status]}</Text>
         </View>
       </View>

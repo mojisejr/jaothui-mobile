@@ -105,8 +105,8 @@ export function HomeScreen() {
 
       {state.status === "error" ? (
         <StateBlock
-          title="โหลดข้อมูลไม่สำเร็จ"
-          message={state.error.message || "กรุณาลองใหม่อีกครั้ง"}
+          title="โหลดข้อมูลหน้าหลักไม่ได้"
+          message="ลองอีกครั้ง หรือเปิดหน้าค้นหาควายด้านบน"
           actionLabel="ลองใหม่"
           onAction={state.reload}
         />

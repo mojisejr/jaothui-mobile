@@ -93,6 +93,23 @@ describe("mounted native complete buffalo photo", () => {
     expect(tree.root.findAllByType(Image)).toHaveLength(0);
   });
 
+  it("requests a versioned card thumbnail, then falls back to the same original once", () => {
+    const original = source + "?v=updated";
+    renderer.act(() => { tree = renderer.create(React.createElement(BuffaloCard, {
+      buffalo: { ...buffalo, imageUrl: original }, onPress: jest.fn(),
+    })); });
+    const candidate = tree.root.findByType(Image);
+    const optimized = new URL(candidate.props.source.uri);
+    expect(optimized.pathname).toBe("/_next/image");
+    expect(optimized.searchParams.get("url")).toBe(original);
+    expect(optimized.searchParams.get("w")).toBe("256");
+    renderer.act(() => candidate.props.onError());
+    const fallback = tree.root.findByType(Image);
+    expect(fallback.props.source.uri).toBe(original);
+    renderer.act(() => fallback.props.onError());
+    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+  });
+
   it("resets failure on URI change and ignores a late error from the replaced source", () => {
     mount();
     const staleError = tree.root.findByType(Image).props.onError;
@@ -265,6 +282,8 @@ describe("mounted native complete buffalo photo", () => {
     expect(frame.findAll((node) => node.props.accessibilityLabel === "อัปเดตภาพ… ฟ้าประทาน")).toHaveLength(0);
     expect(slots()[0].findByProps({ accessibilityLabel: "อัปเดตภาพ… ฟ้าประทาน" }).props.accessibilityState?.busy).toBe(true);
     renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
+    expect(tree.root.findAllByType(Image)[1].props.source.uri).toBe(`${source}?v=b`);
+    renderer.act(() => tree.root.findAllByType(Image)[1].props.onError());
     expect(tree.root.findByType(Image)).toBe(good);
     expect(slots()[0].findByProps({ accessibilityLabel: "อัปเดตไม่ได้ ฟ้าประทาน" })).toBeDefined();
     let stopped = false;
@@ -277,7 +296,7 @@ describe("mounted native complete buffalo photo", () => {
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(onPress).not.toHaveBeenCalled();
     expect(tree.root.findAllByType(Image)[0]).toBe(good);
-    expect(tree.root.findAllByType(Image)[1].props.source.uri).toBe(`${source}?v=b`);
+    expect(new URL(tree.root.findAllByType(Image)[1].props.source.uri).searchParams.get("url")).toBe(`${source}?v=b`);
     renderer.act(() => tree.root.findAllByType(Image)[1].props.onLoad());
     expect(slots()).toHaveLength(1);
     expect(slots()[0].findAll((node) => node.props.accessibilityLabel?.includes("ภาพ"))).toHaveLength(0);
