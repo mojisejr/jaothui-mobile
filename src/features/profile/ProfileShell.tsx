@@ -12,7 +12,10 @@ import {
   getReviewerSandboxAvailability,
   updateReviewerWalletFixture,
 } from "@/auth/reviewerSandbox";
-import { clearMobileSession, loadMobileSession } from "@/auth/sessionStorage";
+import { logoutMobileSession, loadMobileSession } from "@/auth/sessionStorage";
+import { currentSessionGeneration } from "@/auth/sessionLifecycle";
+import { consumeHistoryIntent } from "@/notifications/historyIntent";
+import { NotificationPreferences } from "@/notifications/NotificationPreferences";
 import { AppShell } from "@/components/AppShell";
 import { BuffaloCard } from "@/components/BuffaloCard";
 import { PhotoRefreshControl } from "@/components/PhotoRefreshControl";
@@ -66,10 +69,16 @@ export function ProfileShell() {
   const reviewerAvailabilityRequestInFlight = useRef(false);
 
   const loadProfileFromSession = useCallback(async (session: MobileSession) => {
+    const generation = currentSessionGeneration();
     setState({ status: "loading", session });
     try {
       const profile = await getProfile(session.sessionToken);
+      if (generation !== currentSessionGeneration()) return;
       setState({ status: "connected", session, profile });
+      if (session.identity.sessionVersion === 2) {
+        const target = await consumeHistoryIntent(session.identity.accountId);
+        if (target && generation === currentSessionGeneration()) router.replace(target as import("expo-router").Href);
+      }
     } catch (error) {
       if (await recoverRejectedMobileSession(error)) {
         setState({
@@ -85,7 +94,7 @@ export function ProfileShell() {
         session,
       });
     }
-  }, []);
+  }, [router]);
 
   const refresh = useCallback(async () => {
     try {
@@ -229,7 +238,7 @@ export function ProfileShell() {
   );
 
   const logout = useCallback(async () => {
-    await clearMobileSession();
+    await logoutMobileSession();
     setReviewerFixtureLinked(false);
     setState({ status: "disconnected" });
   }, []);
@@ -360,6 +369,7 @@ export function ProfileShell() {
       ) : null}
       {state.status === "connected" ? (
         <ConnectedProfile
+          session={state.session}
           appleAvailable={appleAvailable}
           profile={state.profile}
           onLogout={logout}
@@ -585,6 +595,7 @@ function ReviewerAccessProfile({
 }
 
 function ConnectedProfile({
+  session,
   appleAvailable,
   deleting,
   onAttachApple,
@@ -597,6 +608,7 @@ function ConnectedProfile({
   reviewerFixtureBusy,
   reviewerFixtureLinked,
 }: {
+  session: MobileSession;
   appleAvailable: boolean;
   deleting: boolean;
   onAttachApple: () => void;
@@ -685,6 +697,8 @@ function ConnectedProfile({
       {profile.identity.provider === "line" || profile.identity.provider === "apple" ? (
         <View style={styles.card}><Text style={styles.sectionTitle}>กิจกรรมประกวด</Text><SettingsRow label="ประวัติการสมัครประกวด" right="ดูใบสมัคร →" disabled={false} disabledCaption={null} onPress={() => router.push("/registrations")} /></View>
       ) : null}
+
+      {profile.identity.provider === "line" || profile.identity.provider === "apple" ? <NotificationPreferences session={session} /> : null}
 
       {isReviewer ? (
         <View style={styles.reviewerFixtureCard}>

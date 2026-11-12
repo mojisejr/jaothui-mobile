@@ -1,5 +1,5 @@
 import { deleteAccount } from "@/api/jaothui";
-import { clearMobileSession } from "@/auth/sessionStorage";
+import { logoutMobileSession } from "@/auth/sessionStorage";
 import type { MobileAccountDeletionReceipt } from "@/types/mobile-api";
 
 type AccountDeletionDependencies = {
@@ -13,7 +13,7 @@ export type AccountDeletionResult = {
 };
 
 const defaultDependencies: AccountDeletionDependencies = {
-  clearSession: clearMobileSession,
+  clearSession: logoutMobileSession,
   deleteAccount,
 };
 

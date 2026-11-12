@@ -49,6 +49,13 @@
           "cameraPermission": "อนุญาตให้ JAOTHUI ใช้กล้องเพื่อถ่ายรูปประกอบใบสมัครประกวดกระบือ",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "competition-reminders",
+          "enableBackgroundRemoteNotifications": false
+        }
       ]
     ],
     "experiments": {

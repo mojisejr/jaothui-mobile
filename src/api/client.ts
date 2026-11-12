@@ -23,7 +23,7 @@ export const API_BASE_URL = resolveApiBaseUrl(
 );
 
 type MobileRequestOptions = {
-  method?: "DELETE" | "GET" | "POST";
+  method?: "DELETE" | "GET" | "POST" | "PUT";
   body?: unknown;
   rawBody?: ArrayBuffer;
   contentType?: string;
@@ -49,7 +49,7 @@ function buildHeaders(options: MobileRequestOptions) {
     "Cache-Control": "no-cache",
   };
 
-  if (options.method === "POST" || (options.method === "DELETE" && options.body !== undefined)) {
+  if (options.method === "POST" || options.method === "PUT" || (options.method === "DELETE" && options.body !== undefined)) {
     headers["Content-Type"] = options.contentType ?? "application/json";
   }
 
@@ -69,7 +69,7 @@ export async function mobileRequest<T>(
     method,
     cache: "no-store",
     headers: buildHeaders({ ...options, method }),
-    body: options.rawBody ?? (method === "POST" || (method === "DELETE" && options.body !== undefined) ? JSON.stringify(options.body ?? {}) : undefined),
+    body: options.rawBody ?? (method === "POST" || method === "PUT" || (method === "DELETE" && options.body !== undefined) ? JSON.stringify(options.body ?? {}) : undefined),
     ...(options.signal ? { signal: options.signal } : {}),
   });
   let payload: MobileResponse<T>;

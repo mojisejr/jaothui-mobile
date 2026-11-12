@@ -42,7 +42,7 @@ export function SettingsRow({
       ]}
       testID={testID}
     >
-      <View>
+      <View style={styles.labelContainer}>
         <Text style={[styles.label, variant === "danger" && styles.dangerText]}>{label}</Text>
         {disabled && disabledCaption ? <Text style={styles.caption}>{disabledCaption}</Text> : null}
       </View>
@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
   },
+  labelContainer: { flex: 1 },
   caption: {
     color: colors.muted,
     fontSize: 12,
@@ -84,6 +85,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   right: {
+    flexShrink: 1,
+    maxWidth: "45%",
+    textAlign: "right",
     color: colors.gold,
     fontSize: 12,
     fontWeight: "800",
