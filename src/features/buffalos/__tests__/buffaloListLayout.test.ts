@@ -10,6 +10,8 @@ import { colors, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 
 jest.mock("expo-clipboard", () => ({ setStringAsync: jest.fn(async () => true) }));
+jest.mock("@react-navigation/native", () => ({ useIsFocused: () => mockFocused }));
+let mockFocused = true;
 jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 jest.mock("@/api/jaothui", () => ({ getBuffalos: jest.fn() }));
 jest.mock("@/photos/usePhotoFreshness", () => ({ usePhotoFreshness: jest.fn(() => mockPhotos) }));
@@ -42,7 +44,7 @@ describe("real virtualized list parent and natural card extent", () => {
   const originalWindow = Dimensions.get("window");
   let tree: ReturnType<typeof renderer.create> | undefined;
   beforeEach(() => {
-    jest.useFakeTimers(); jest.clearAllMocks();
+    mockFocused = true; jest.useFakeTimers(); jest.clearAllMocks();
     jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockImplementation(() => new Promise(() => {}));
     (getBuffalos as jest.Mock).mockResolvedValue({ items, pagination: { page: 1, totalPages: 2, totalCount: 38 } });
   });
@@ -117,7 +119,7 @@ describe("real virtualized list parent and natural card extent", () => {
     await renderer.act(() => tree!.root.findByType(TextInput).props.onChangeText("ค้นหา"));
     await renderer.act(() => { jest.advanceTimersByTime(400); });
     await renderer.act(async () => { jest.advanceTimersByTime(0); await Promise.resolve(); });
-    expect(getBuffalos).toHaveBeenLastCalledWith(expect.objectContaining({ search: "ค้นหา", page: 1 }));
+    expect(getBuffalos).toHaveBeenLastCalledWith(expect.objectContaining({ search: "ค้นหา", page: 1 }), expect.anything());
     await renderer.act(() => cards()[0].findByProps({ testID: "card-image-navigation" }).props.onPress());
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/certs/[microchip]", params: { microchip: items[0].microchip } });
     mockRouter.push.mockClear();
@@ -127,6 +129,62 @@ describe("real virtualized list parent and natural card extent", () => {
     expect(mockRouter.push).not.toHaveBeenCalled(); expect(mockPhotos.refresh).not.toHaveBeenCalled();
     expect(getBuffalos).toHaveBeenCalledTimes(beforeCopyRequests); expect(cards()[0].findByType(Image)).toBe(image);
     list().props.onRefresh(); expect(mockPhotos.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the complete previous page and ignores a delayed reply after the user searches again", async () => {
+    await mount(390);
+    let resolveFirst!: (value: unknown) => void;
+    (getBuffalos as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }));
+    const type = async (value: string) => {
+      await renderer.act(() => tree!.root.findByType(TextInput).props.onChangeText(value));
+      await renderer.act(() => jest.advanceTimersByTime(400));
+    };
+    await type("first");
+    const firstSignal: AbortSignal = (getBuffalos as jest.Mock).mock.lastCall[1];
+    expect(list().props.data).toEqual(items);
+    expect(tree!.root.findByProps({ accessibilityLiveRegion: "polite" })).toBeTruthy();
+    const nextItems = [items[2]];
+    (getBuffalos as jest.Mock).mockResolvedValueOnce({ items: nextItems, pagination: { page: 1, totalCount: 1, totalPages: 1 } });
+    await type("second");
+    expect(firstSignal.aborted).toBe(true);
+    await renderer.act(async () => resolveFirst({ items: [], pagination: { page: 1, totalCount: 0, totalPages: 0 } }));
+    expect(list().props.data).toEqual(nextItems);
+  });
+
+  it("aborts pending work on blur and returns to completed results without another request", async () => {
+    await mount(390);
+    const focus = async (value: boolean) => {
+      mockFocused = value;
+      await renderer.act(async () => tree!.update(React.createElement(BuffaloListScreen)));
+    };
+    const firstCount = (getBuffalos as jest.Mock).mock.calls.length;
+    await focus(false);
+    await focus(true);
+    expect(getBuffalos).toHaveBeenCalledTimes(firstCount);
+    (getBuffalos as jest.Mock).mockImplementationOnce(() => new Promise(() => {}));
+    await renderer.act(() => tree!.root.findByType(TextInput).props.onChangeText("pending"));
+    await renderer.act(() => jest.advanceTimersByTime(400));
+    const signal = (getBuffalos as jest.Mock).mock.lastCall[1] as AbortSignal;
+    await focus(false);
+    expect(signal.aborted).toBe(true);
+    await focus(true);
+    expect(getBuffalos).toHaveBeenCalledTimes(firstCount + 2);
+    expect(list().props.data).toEqual(items);
+  });
+
+  it("preserves prior cards on timeout, retries the current query, and only shows empty after success", async () => {
+    await mount(390);
+    (getBuffalos as jest.Mock).mockImplementationOnce(() => new Promise(() => {}));
+    await renderer.act(() => tree!.root.findByType(TextInput).props.onChangeText("unknown"));
+    await renderer.act(() => jest.advanceTimersByTime(400));
+    await renderer.act(() => jest.advanceTimersByTime(20_000));
+    expect(list().props.data).toEqual(items);
+    expect(tree!.root.findByProps({ title: "โหลดรายชื่อควายไม่ได้" })).toBeTruthy();
+    (getBuffalos as jest.Mock).mockResolvedValueOnce({ items: [], pagination: { page: 1, totalPages: 1, totalCount: 0 } });
+    await renderer.act(async () => tree!.root.findByProps({ actionLabel: "ลองอีกครั้ง" }).props.onAction());
+    expect(list().props.data).toEqual([]);
+    expect(tree!.root.findByProps({ title: "ไม่พบควายตามคำค้นนี้" })).toBeTruthy();
+    expect(tree!.root.findByType(TextInput).props.value).toBe("unknown");
   });
 
   it.each([[350, 1], [390, 1], [390, 1.3]])("does not apply list ownership to Home/owned default-grid cards at %s / %s", async (width, fontScale) => {

@@ -5,6 +5,7 @@ import { CopyMicrochip } from "@/components/CopyMicrochip";
 import { colors, radius, spacing } from "@/design/tokens";
 import type { MobileBuffaloCard } from "@/types/mobile-api";
 import { formatBuffaloAge, formatThaiBirthdate } from "@/utils/format";
+import { cardThumbnailUrl } from "@/photos/cardThumbnail";
 import { buffaloSex } from "@/utils/buffaloSex";
 import { buffaloCardColumns, buffaloCardFooterHeight } from "./buffaloCardLayout";
 
@@ -17,15 +18,18 @@ type BuffaloCardProps = {
 };
 
 function BuffaloCardComponent({ buffalo, onPress, photo, layout = "grid" }: BuffaloCardProps) {
-  const { width, fontScale } = useWindowDimensions();
+  const { width, fontScale, scale } = useWindowDimensions();
   const singleColumn = buffaloCardColumns(width, fontScale) === 1;
+  const availableWidth = width - 2 * spacing.screenX;
+  const cardWidth = singleColumn ? availableWidth : (availableWidth - spacing.cardGap) / 2;
+  const thumbnail = cardThumbnailUrl(photo ? photo.uri : buffalo.imageUrl, cardWidth * scale);
   const sex = buffaloSex(buffalo.sex);
   return (
     <View style={[styles.card, singleColumn && (layout === "list" ? styles.listSingleColumn : styles.singleColumn)]}>
       <BuffaloPhotoFeedback key={buffalo.microchip}>
         <Pressable testID="card-image-navigation" onPress={onPress} accessibilityRole="link" accessibilityLabel={`ดูใบพันธุ์ประวัติ ${buffalo.name || "ไม่ทราบชื่อ"}`}>
           <View style={styles.imageFrame}>
-            <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} retry={photo?.retry} label={buffalo.name || "ไม่ทราบชื่อ"} />
+            <BuffaloPhoto uri={photo ? photo.uri : buffalo.imageUrl} identity={buffalo.microchip} thumbnail={thumbnail} retry={photo?.retry} label={buffalo.name || "ไม่ทราบชื่อ"} />
           </View>
         </Pressable>
         <View style={styles.body}>

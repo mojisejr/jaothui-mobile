@@ -47,17 +47,29 @@ export function buildBuffaloQueryString(query: MobileBuffaloQuery = {}) {
   return params.toString();
 }
 
-export function getBuffalos(query: MobileBuffaloQuery = {}) {
-  return mobileGet<MobileBuffaloList>(`/api/mobile/v1/buffalos?${buildBuffaloQueryString(query)}`);
+export function getBuffalos(query: MobileBuffaloQuery = {}, signal?: AbortSignal) {
+  return mobileRequest<MobileBuffaloList>(`/api/mobile/v1/buffalos?${buildBuffaloQueryString(query)}`, { signal });
 }
 
 export function getCertDetail(microchip: string) {
   return mobileGet<MobileCertDetail>(`/api/mobile/v1/certs/${encodeURIComponent(microchip)}`);
 }
 
-export function getCertCertificate(microchip: string) {
-  return mobileGet<MobileCertificateImage>(
-    `/api/mobile/v1/certs/${encodeURIComponent(microchip)}/certificate`
+export function getCertSummary(microchip: string, signal: AbortSignal) {
+  return mobileRequest<Pick<MobileCertDetail, "buffalo">>(
+    `/api/mobile/v1/certs/${encodeURIComponent(microchip)}/summary`, { signal }
+  );
+}
+
+export function getCertRewards(microchip: string, signal: AbortSignal) {
+  return mobileRequest<Pick<MobileCertDetail, "rewards">>(
+    `/api/mobile/v1/certs/${encodeURIComponent(microchip)}/rewards`, { signal }
+  );
+}
+
+export function getCertCertificate(microchip: string, signal?: AbortSignal) {
+  return mobileRequest<MobileCertificateImage>(
+    `/api/mobile/v1/certs/${encodeURIComponent(microchip)}/certificate`, { signal }
   );
 }
 
